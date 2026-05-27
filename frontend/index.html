@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Twin AGV - Three.js</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+          }
+        }
+    </script>
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <div class="left-pane" style="position: relative;">
+            <div id="scene-container"></div>
+            
+            <div id="info-overlay">
+                <h1>Digital Twin AGV</h1>
+                <p>Status: <span id="status" class="status-offline">Łączenie...</span></p>
+                <p>Prędkość: <span id="ui-rpm">0</span> RPM</p>
+                <p>Bateria: <span id="ui-volt">0</span> V</p>
+            </div>
+
+            <div id="performance-monitor" style="position: absolute; top: 20px; right: 20px; color: #00ff00; background: rgba(0,0,0,0.8); padding: 10px; font-family: monospace; z-index: 100; pointer-events: none; border-radius: 5px; border: 1px solid #00ff00; font-size: 14px;">
+                Inicjalizacja metryk...
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <h2>KOKPIT OPERATORSKI IIoT</h2>
+            <hr>
+            
+            <div class="grafana-card">
+                <h4>Prędkość Obrotowa Kół (RPM)</h4>
+                <iframe src="http://localhost:3000/d-solo/advbjcq/agv?orgId=1&from=now-5m&to=now&timezone=browser&panelId=panel-8&refresh=1s" width="100%" height="220" frameborder="0"></iframe>
+            </div>
+
+            <div class="grafana-card">
+                <h4>Temperatura Łożysk Silników (°C)</h4>
+                <iframe src="http://localhost:3000/d-solo/advbjcq/agv?orgId=1&from=now-5m&to=now&timezone=browser&panelId=panel-9&refresh=1s" width="100%" height="220" frameborder="0"></iframe>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

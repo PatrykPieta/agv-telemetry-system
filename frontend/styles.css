@@ -1,0 +1,104 @@
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* Zapobiega paskom przewijania */
+    font-family: sans-serif;
+    background-color: #1a1a1a; /* Ciemne tło, dobry kontrast dla modelu */
+    color: white;
+    width: 100%;
+    height: 100%;
+}
+
+/* --- Nowy elastyczny układ Flexbox (Podział ekranu side-by-side) --- */
+.app-container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Lewy panel (Twoja scena 3D + oryginalna nakładka) */
+.left-pane {
+    flex: 65; /* Zajmuje dokładnie 65% szerokości ekranu */
+    height: 100%;
+    position: relative; /* Kluczowe, by #info-overlay pozycjonował się wewnątrz tej sekcji */
+}
+
+/* Twoje oryginalne scene-container - teraz skaluje się elastycznie w lewym panelu */
+#scene-container {
+    width: 100%;
+    height: 100%;
+}
+
+/* Twoja oryginalna nakładka tekstowa z zachowanym wyglądem */
+#info-overlay {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 15px;
+    border-radius: 8px;
+    pointer-events: none; /* Kliknięcia przechodzą do sceny 3D */
+    z-index: 10;
+}
+
+#info-overlay h1 {
+    margin-top: 0;
+    font-size: 1.2rem;
+}
+
+/* Twój oryginalny styl statusu offline */
+.status-offline {
+    color: #ff4d4d;
+    font-weight: bold;
+}
+
+/* --- Prawy panel operatorski: Integracja z Grafaną --- */
+.control-panel {
+    flex: 35; /* Zajmuje dokładnie 35% szerokości ekranu */
+    height: 100%;
+    background-color: #111217; /* Kolor tła dopasowany fabrycznie do ciemnej Grafany */
+    border-left: 2px solid #2d2d2d;
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow-y: auto; /* Bezpieczeństwo: jeśli ekran będzie mały, panel dostanie suwak */
+}
+
+.control-panel h2 {
+    margin: 0;
+    font-size: 1.3rem;
+    text-align: center;
+    letter-spacing: 1px;
+    color: #ffffff;
+}
+
+.control-panel hr {
+    border: 0;
+    height: 1px;
+    background: #2d2d2d;
+    margin: 0;
+}
+
+/* Estetyczne ramki (karty) wokół osadzonych wykresów */
+.grafana-card {
+    background: #181b1f; /* Kolor tła paneli wewnątrz Grafany */
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid #24292e;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.grafana-card h4 {
+    margin: 0 0 12px 0;
+    font-size: 0.95rem;
+    font-weight: normal;
+    color: #cccccc;
+}
+
+/* Wygładzenie krawędzi samych ramek wykresów */
+iframe {
+    border-radius: 6px;
+    background: #111217;
+}
