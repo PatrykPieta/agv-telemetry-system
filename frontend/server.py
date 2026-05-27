@@ -19,7 +19,7 @@ async def websocket_endpoint(websocket: WebSocket):
         )
         
         # Elastyczna subskrypcja (nie blokuje się na brakujących tematach)
-        consumer.subscribe(topics=['telemetry_topic', 'alerts_topic'])
+        consumer.subscribe(topics=['telemetry_topic', 'alerts_topic', 'lidar_topic'])
         print("🎧 Nasłuchuję Kafki (Telemetria + Alarmy)...", flush=True)
         
         while True:

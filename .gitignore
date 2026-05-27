@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.py[cod]
+*venv/
+.env
+
+# Docker / Bazy danych
+docker-data/
+postgres-data/
+timescaledb-data/

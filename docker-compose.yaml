@@ -16,10 +16,14 @@ services:
       - zookeeper
     ports:
       - "9092:9092"
+      - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://10.10.133.187:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      # TUTAJ WPISUJESZ SWOJE IP TYLKO DLA ZEWNĘTRZNYCH URZĄDZEŃ
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://10.10.133.187:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -65,6 +69,15 @@ services:
     depends_on:
       - kafka
       - timescaledb
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: on-failure
+
+  edge-processor:
+    build: ./edge-emulator
+    command: ["python", "-u", "edge_processor.py"] 
+    depends_on:
+      - kafka
     environment:
       - PYTHONUNBUFFERED=1
     restart: on-failure

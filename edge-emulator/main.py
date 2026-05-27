@@ -1,12 +1,11 @@
-"""""
+import os
 import time
 import json
 import random
-from datetime import datetime
 from kafka import KafkaProducer
 
 # Konfiguracja Kafki
-KAFKA_BROKER = 'kafka:9092'
+KAFKA_BROKER = os.getenv('KAFKA_SERVER', 'kafka:9092')
 TOPIC = 'telemetry_topic'
 
 def get_producer():
@@ -26,46 +25,33 @@ def start_emulator():
     producer = get_producer()
     
     while True:
-        # 1. ZEGAR FAZOWY - zmiana trybu co 10 sekund
-        current_time = int(time.time())
-        cycle_phase = (current_time // 10) % 4 
-        
-        # Lekki szum dla realizmu (wykresy w Grafanie nie będą płaskie)
+        # ZEGAR FAZOWY
+        current_time_sec = time.time()
+        cycle_phase = (int(current_time_sec) // 10) % 4 
         noise = random.uniform(-2.0, 2.0)
         
-        # 2. DEFINICJA TRYBÓW JAZDY OMNIWHEEL (MECANUM)
+        # DEFINICJA TRYBÓW
         if cycle_phase == 0:
             mode = "JAZDA W PRZÓD"
-            fl_rpm, fr_rpm = 100.0, 100.0
-            rl_rpm, rr_rpm = 100.0, 100.0
-        
+            fl_rpm, fr_rpm, rl_rpm, rr_rpm = 100.0, 100.0, 100.0, 100.0
         elif cycle_phase == 1:
             mode = "STRAFE W PRAWO"
-            # Znoszenie się sił pcha wózek w prawo
-            fl_rpm, fr_rpm = 100.0, -100.0
-            rl_rpm, rr_rpm = -100.0, 100.0
-        
+            fl_rpm, fr_rpm, rl_rpm, rr_rpm = 100.0, -100.0, -100.0, 100.0
         elif cycle_phase == 2:
             mode = "OBRÓT W MIEJSCU"
-            # Lewa strona w przód, prawa w tył
-            fl_rpm, fr_rpm = 80.0, -80.0
-            rl_rpm, rr_rpm = 80.0, -80.0
-            
+            fl_rpm, fr_rpm, rl_rpm, rr_rpm = 80.0, -80.0, 80.0, -80.0
         elif cycle_phase == 3:
             mode = "STRAFE W LEWO"
-            # Odwrotność fazy 1
-            fl_rpm, fr_rpm = -100.0, 100.0
-            rl_rpm, rr_rpm = 100.0, -100.0
+            fl_rpm, fr_rpm, rl_rpm, rr_rpm = -100.0, 100.0, 100.0, -100.0
 
-        # Dodajemy szum do idealnych wartości
         current_fl = fl_rpm + noise
         current_fr = fr_rpm + noise
         current_rl = rl_rpm + noise
         current_rr = rr_rpm + noise
 
-        # 3. BUDOWANIE PACZKI DANYCH
+        # BUDOWANIE PACZKI DANYCH
         payload = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": current_time_sec, # Zmiana z tekstu ISO na Unix Float! (Wymagane przez bazę)
             "agv_id": "AGV-01",
             "telemetry": {
                 "power_supply": {
@@ -81,19 +67,17 @@ def start_emulator():
                 "imu": {
                     "accel_g": {"x": 0.02, "y": -0.01, "z": 0.99},
                     "gyro_dps": {"x": 0.1, "y": 0.0, "z": round(12.5 + noise, 1)}
+                },
+                "edge_diagnostics": {
+                    "cpu_temp_C": round(45.0 + random.uniform(-2.0, 2.0), 1)
                 }
             }
         }
 
-        # 4. WYSYŁKA
         producer.send(TOPIC, payload)
         
-        # Używamy end='\r', aby konsola nadpisywała tę samą linijkę, zamiast spamować 10 liniami na sekundę
         print(f"🔄 {mode:<16} | FL:{current_fl:>5.1f} FR:{current_fr:>6.1f} RL:{current_rl:>6.1f} RR:{current_rr:>6.1f}", end='\r', flush=True)
-        
-        time.sleep(0.1) # 10 Hz
+        time.sleep(0.1)
 
 if __name__ == "__main__":
-    start_emulator
-
-    """
+    start_emulator() # <-- BŁĄD BYŁ TUTAJ (Brakowało nawiasów)

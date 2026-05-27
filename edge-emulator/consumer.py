@@ -4,7 +4,6 @@ import time
 import psycopg2
 from kafka import KafkaConsumer
 
-# Konfiguracja bazy danych (zgodna z Twoim docker-compose.yaml)
 DB_HOST = "timescaledb"
 DB_PORT = "5432"
 DB_NAME = "agv_db"
@@ -29,7 +28,6 @@ def connect_db():
 
 def init_db(conn):
     cursor = conn.cursor()
-    # Kasujemy starą tabelę i robimy nową, pod nasz nowy przemysłowy JSON
     cursor.execute("""
         DROP TABLE IF EXISTS telemetry CASCADE;
         
@@ -47,10 +45,9 @@ def init_db(conn):
         );
     """)
     try:
-        # Tworzenie hiper-tabeli dla wydajności TimescaleDB
         cursor.execute("SELECT create_hypertable('telemetry', 'time');")
     except Exception:
-        pass # Ignorujemy błąd, jeśli już jest hiper-tabelą
+        pass 
     cursor.close()
 
 def start_consumer():
@@ -63,7 +60,7 @@ def start_consumer():
 
     consumer = KafkaConsumer(
         'telemetry_topic',
-        bootstrap_servers=['10.10.133.187:9092'],
+        bootstrap_servers=['kafka:9092'],
         group_id='agv_db_writers',
         value_deserializer=lambda x: json.loads(x.decode('utf-8'))
     )
@@ -74,27 +71,22 @@ def start_consumer():
     for message in consumer:
         data = message.value
         try:
-            # Nawigacja po nowej ścieżce JSON (rozwiązuje KeyError)
             t_stamp = data['timestamp']
             agv_id = data['agv_id']
             
-            # Zasilanie
             volts = data['telemetry']['power_supply']['bus_voltage_V']
             amps = data['telemetry']['power_supply']['current_A']
             
-            # Silniki
             m = data['telemetry']['motors']
             fl_rpm, fl_temp = m['front_left']['speed_rpm'], m['front_left']['temp_C']
             fr_rpm, fr_temp = m['front_right']['speed_rpm'], m['front_right']['temp_C']
             rl_rpm, rl_temp = m['rear_left']['speed_rpm'], m['rear_left']['temp_C']
             rr_rpm, rr_temp = m['rear_right']['speed_rpm'], m['rear_right']['temp_C']
             
-            # IMU
             imu = data['telemetry']['imu']
             ax, ay, az = imu['accel_g']['x'], imu['accel_g']['y'], imu['accel_g']['z']
             gx, gy, gz = imu['gyro_dps']['x'], imu['gyro_dps']['y'], imu['gyro_dps']['z']
 
-            # Zapis do nowej tabeli
             cursor.execute("""
                 INSERT INTO telemetry (
                     time, agv_id, bus_voltage_v, current_a,
@@ -117,7 +109,6 @@ def start_consumer():
             ))
             
         except KeyError as e:
-            # Zabezpieczenie na wypadek, gdyby Kafka wypluła jakąś resztkę starych danych
             print(f"Pominięto starą paczkę. Brak klucza: {e}")
 
 if __name__ == "__main__":

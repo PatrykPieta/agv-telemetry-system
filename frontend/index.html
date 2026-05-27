@@ -21,12 +21,16 @@
         <div class="left-pane" style="position: relative;">
             <div id="scene-container"></div>
             
-            <div id="info-overlay">
-                <h1>Digital Twin AGV</h1>
-                <p>Status: <span id="status" class="status-offline">Łączenie...</span></p>
-                <p>Prędkość: <span id="ui-rpm">0</span> RPM</p>
-                <p>Bateria: <span id="ui-volt">0</span> V</p>
-            </div>
+            <div id="ui-overlay" style="position: absolute; top: 15px; left: 15px; z-index: 9999; background: rgba(15, 15, 15, 0.85); padding: 15px; border-radius: 8px; border: 1px solid #444; color: white;">
+            <h2 style="margin-top: 0; font-size: 18px;">Digital Twin AGV</h2>
+            <p>Status: <span id="status" class="status-offline">Łączenie...</span></p>
+            <p>Prędkość: <span id="ui-rpm">0</span> RPM</p>
+            <p>Bateria: <span id="ui-volt">0</span> V</p>
+
+            <button id="camera-toggle" style="margin-top: 10px; width: 100%; padding: 8px 10px; cursor: pointer; background-color: #333; color: #00ff00; border: 1px solid #555; border-radius: 4px; font-weight: bold;">
+                🔒 Podążaj za wózkiem
+            </button>
+        </div>
 
             <div id="performance-monitor" style="position: absolute; top: 20px; right: 20px; color: #00ff00; background: rgba(0,0,0,0.8); padding: 10px; font-family: monospace; z-index: 100; pointer-events: none; border-radius: 5px; border: 1px solid #00ff00; font-size: 14px;">
                 Inicjalizacja metryk...
