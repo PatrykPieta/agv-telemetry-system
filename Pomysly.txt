@@ -1,0 +1,37 @@
+🛠️ Bieżące i nadchodzące zadania
+
+Podłączenie do fizycznego wózka (Aktualny priorytet! 🎯)
+
+Odświeżenie modelu AGV (nowe koła Mecanum, optymalizacja liczby elementów)
+
+Potrasowanie Grafany (zaawansowane panele, mapy ciepła)
+
+Wymasterowanie Adminera (indeksy czasowe, optymalizacja SQL)
+
+Wymasterowanie Apache Spark (agregacje okienkowe, zarządzanie pamięcią)
+
+Etap czyszczenia danych (filtracja szumów i anomalii z prawdziwych czujników)
+
+Stworzenie tabeli agregacyjnej w bazie (uśrednianie danych 10 Hz do interwałów minutowych – pod Power BI)
+
+Wprowadzenie poważnego Machine Learningu (Predictive Maintenance)
+
+Interpolacja ruchu AGV (płynny ruch w Three.js za pomocą funkcji lerp)
+
+🚀 Duże pomysły na przyszłość
+Środowisko symulacyjne dla algorytmów autonomicznych (np. omijanie przeszkód)
+
+Stworzenie całej, produkcyjnej aplikacji (panele menedżerskie, raporty PDF)
+
+Wdrożenie i udział Power BI (zaawansowane raportowanie biznesowe i wskaźniki OEE)
+
+
+Dane/wykresy które chce tworzyć
+
+Prędkość z impulsów lub żyroskopu i akcelerometru
+Przebyty dystans
+Zależność poboru prądu od prędkości, kiedy zuzycie sie zwieksza cos jest nie tak, tarcie itd
+Przeliczanie prądu na pieniądze
+Lista zdarzeń
+Heatmap
+Analiza FFT drgań

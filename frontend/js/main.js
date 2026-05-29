@@ -242,7 +242,7 @@ function animate() {
         const perfMonitor = document.getElementById("performance-monitor");
         if (perfMonitor) {
             perfMonitor.innerHTML = `
-                FPS: ${currentFPS} <br>di
+                FPS: ${currentFPS} <br>
                 DRAW CALLS: ${renderer.info.render.calls} <br>
                 TRÓJKĄTY:   ${renderer.info.render.triangles} <br>
                 GEOMETRIE:  ${renderer.info.memory.geometries}
