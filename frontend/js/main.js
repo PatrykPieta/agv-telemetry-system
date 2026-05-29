@@ -15,6 +15,10 @@ const perfMonitor = document.getElementById("performance-monitor");
 // --- NOWE: Kinematyka napędu różnicowego ---
 let speedL = 0; // Prędkość lewej gąsienicy/kół
 let speedR = 0; // Prędkość prawej gąsienicy/kół
+// --- ZMIENNE DO OBLICZANIA FPS ---
+let lastFpsTime = performance.now();
+let framesThisSecond = 0;
+let currentFPS = 0;
 
 function init() {
     scene = new THREE.Scene();
@@ -225,9 +229,20 @@ function animate() {
         if (agvModel.position.length() > 50) {
             agvModel.position.set(0, 0, 0);
         }
-
+// --- OBLICZANIE FPS I AKTUALIZACJA UI ---
+        const now = performance.now();
+        framesThisSecond++; // Dodajemy 1 za każdą wyrenderowaną klatkę
+        
+        // Jeśli minęła równo sekunda (1000 milisekund)
+        if (now >= lastFpsTime + 1000) { 
+            currentFPS = framesThisSecond; // Zapisujemy wynik
+            framesThisSecond = 0;          // Zerujemy licznik na kolejną sekundę
+            lastFpsTime = now;             // Resetujemy stoper
+        }
+        const perfMonitor = document.getElementById("performance-monitor");
         if (perfMonitor) {
             perfMonitor.innerHTML = `
+                FPS: ${currentFPS} <br>di
                 DRAW CALLS: ${renderer.info.render.calls} <br>
                 TRÓJKĄTY:   ${renderer.info.render.triangles} <br>
                 GEOMETRIE:  ${renderer.info.memory.geometries}
