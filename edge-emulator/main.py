@@ -62,7 +62,7 @@ def start_emulator():
                     "front_left": {"speed_rpm": round(current_fl, 1), "temp_C": 42.1},
                     "front_right": {"speed_rpm": round(current_fr, 1), "temp_C": 41.8},
                     "rear_left": {"speed_rpm": round(current_rl, 1), "temp_C": 43.0},
-                    "rear_right": {"speed_rpm": round(current_rr, 1), "temp_C": 58.5}
+                    "rear_right": {"speed_rpm": round(current_rr, 1), "temp_C": 40.5}
                 },
                 "imu": {
                     "accel_g": {"x": 0.02, "y": -0.01, "z": 0.99},

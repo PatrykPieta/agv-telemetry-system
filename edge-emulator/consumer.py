@@ -29,9 +29,7 @@ def connect_db():
 def init_db(conn):
     cursor = conn.cursor()
     cursor.execute("""
-        DROP TABLE IF EXISTS telemetry CASCADE;
-        
-        CREATE TABLE telemetry (
+        CREATE TABLE IF NOT EXISTS telemetry (
             time TIMESTAMPTZ NOT NULL,
             agv_id TEXT,
             bus_voltage_v DOUBLE PRECISION,

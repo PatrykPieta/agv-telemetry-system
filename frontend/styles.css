@@ -102,3 +102,13 @@ iframe {
     border-radius: 6px;
     background: #111217;
 }
+
+/* --- NADPISANIE STYLÓW LIL-GUI (Przesunięcie na środek lewego panelu) --- */
+.lil-gui.root {
+    position: absolute !important; /* Zamieniamy fixed na absolute, by trzymał się lewego panelu */
+    top: 20px !important;          /* Margines od góry */
+    right: auto !important;        /* Wyłączamy przyklejenie do prawej */
+    left: 40% !important;          /* Przesuwamy na środek */
+    transform: translateX(-50%) !important; /* Korygujemy o połowę szerokości panelu (prawdziwe wyśrodkowanie) */
+    z-index: 100 !important;       /* Upewniamy się, że jest na wierzchu */
+}
