@@ -22,7 +22,18 @@ export function updatePhysics(agvModel, wheelMeshes, rpmsState) {
     // Translacja ramy
     agvModel.translateX(forwardSpeed * 0.1); 
     agvModel.translateZ(strafeSpeed * 0.1);  
-    agvModel.rotateY(turnSpeed * 0.05);      
+    agvModel.rotateY(turnSpeed * 0.05);    
+    
+    // --- DODAJ TEN FRAGMENT POD RUCHEM ---
+    const LIMIT = 45; // Hala ma 100x100, więc 45 to bezpieczna granica przed krawędzią
+    
+    if (Math.abs(agvModel.position.x) > LIMIT) {
+        agvModel.position.x = LIMIT * Math.sign(agvModel.position.x);
+    }
+    if (Math.abs(agvModel.position.z) > LIMIT) {
+        agvModel.position.z = LIMIT * Math.sign(agvModel.position.z);
+    }
+    // -------------------------------------
 
     // Obrót wizualny samych kół
     wheelMeshes.forEach(wheel => {

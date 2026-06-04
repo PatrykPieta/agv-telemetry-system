@@ -43,7 +43,7 @@ def init_db(conn):
         );
     """)
     try:
-        cursor.execute("SELECT create_hypertable('telemetry', 'time');")
+        cursor.execute("SELECT create_hypertable('telemetry', 'time', if_not_exists => TRUE);")
     except Exception:
         pass 
     cursor.close()
