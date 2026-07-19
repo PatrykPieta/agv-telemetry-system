@@ -18,6 +18,11 @@ Wprowadzenie poważnego Machine Learningu (Predictive Maintenance)
 
 Interpolacja ruchu AGV (płynny ruch w Three.js za pomocą funkcji lerp)
 
+Filtr Kalmana
+
+Poprawa DBSCAN
+
+
 🚀 Duże pomysły na przyszłość
 Środowisko symulacyjne dla algorytmów autonomicznych (np. omijanie przeszkód)
 

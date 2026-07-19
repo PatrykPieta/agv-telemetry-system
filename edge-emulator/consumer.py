@@ -2,6 +2,7 @@ import os
 import json
 import time
 import psycopg2
+import psycopg2.extras  # <-- DODANO DO BULK INSERT
 from kafka import KafkaConsumer
 
 DB_HOST = "timescaledb"
@@ -56,58 +57,79 @@ def start_consumer():
     init_db(conn)
     print("Połączono z TimescaleDB i zainicjalizowano nową tabelę!")
 
+    # ZMIANA 1: enable_auto_commit=False (Zabezpiecza przed utratą danych)
     consumer = KafkaConsumer(
         'telemetry_topic',
         bootstrap_servers=['kafka:9092'],
         group_id='agv_db_writers',
-        value_deserializer=lambda x: json.loads(x.decode('utf-8'))
+        value_deserializer=lambda x: json.loads(x.decode('utf-8')),
+        enable_auto_commit=False
     )
 
     cursor = conn.cursor()
-    print("Odbieranie poszerzonego kontraktu z Kafki i zapis do bazy...")
+    print("Odbieranie danych z Kafki i ZAPIS HURTOWY do bazy...")
 
-    for message in consumer:
-        data = message.value
-        try:
-            t_stamp = data['timestamp']
-            agv_id = data['agv_id']
-            
-            volts = data['telemetry']['power_supply']['bus_voltage_V']
-            amps = data['telemetry']['power_supply']['current_A']
-            
-            m = data['telemetry']['motors']
-            fl_rpm, fl_temp = m['front_left']['speed_rpm'], m['front_left']['temp_C']
-            fr_rpm, fr_temp = m['front_right']['speed_rpm'], m['front_right']['temp_C']
-            rl_rpm, rl_temp = m['rear_left']['speed_rpm'], m['rear_left']['temp_C']
-            rr_rpm, rr_temp = m['rear_right']['speed_rpm'], m['rear_right']['temp_C']
-            
-            imu = data['telemetry']['imu']
-            ax, ay, az = imu['accel_g']['x'], imu['accel_g']['y'], imu['accel_g']['z']
-            gx, gy, gz = imu['gyro_dps']['x'], imu['gyro_dps']['y'], imu['gyro_dps']['z']
+    # ZMIANA 2: Konfiguracja bufora
+    BATCH_SIZE = 200
+    buffer = []
 
-            cursor.execute("""
-                INSERT INTO telemetry (
-                    time, agv_id, bus_voltage_v, current_a,
-                    fl_rpm, fl_temp_c, fr_rpm, fr_temp_c,
-                    rl_rpm, rl_temp_c, rr_rpm, rr_temp_c,
-                    accel_x, accel_y, accel_z,
-                    gyro_x, gyro_y, gyro_z
-                ) VALUES (
-                    to_timestamp(%s), %s, %s, %s,
-                    %s, %s, %s, %s,
-                    %s, %s, %s, %s,
-                    %s, %s, %s,
-                    %s, %s, %s
-                )
-            """, (
-                t_stamp, agv_id, volts, amps,
-                fl_rpm, fl_temp, fr_rpm, fr_temp,
-                rl_rpm, rl_temp, rr_rpm, rr_temp,
-                ax, ay, az, gx, gy, gz
-            ))
-            
-        except KeyError as e:
-            print(f"Pominięto starą paczkę. Brak klucza: {e}")
+    while True:
+        # Odpytanie Kafki (pobiera dostępne wiadomości, czeka max 0.5s)
+        records = consumer.poll(timeout_ms=500)
+
+        for tp, messages in records.items():
+            for message in messages:
+                data = message.value
+                try:
+                    t_stamp = data['timestamp']
+                    agv_id = data['agv_id']
+                    
+                    volts = data['telemetry']['power_supply']['bus_voltage_V']
+                    amps = data['telemetry']['power_supply']['current_A']
+                    
+                    m = data['telemetry']['motors']
+                    fl_rpm, fl_temp = m['front_left']['speed_rpm'], m['front_left']['temp_C']
+                    fr_rpm, fr_temp = m['front_right']['speed_rpm'], m['front_right']['temp_C']
+                    rl_rpm, rl_temp = m['rear_left']['speed_rpm'], m['rear_left']['temp_C']
+                    rr_rpm, rr_temp = m['rear_right']['speed_rpm'], m['rear_right']['temp_C']
+                    
+                    imu = data['telemetry']['imu']
+                    ax, ay, az = imu['accel_g']['x'], imu['accel_g']['y'], imu['accel_g']['z']
+                    gx, gy, gz = imu['gyro_dps']['x'], imu['gyro_dps']['y'], imu['gyro_dps']['z']
+
+                    # Dodanie do bufora zamiast bezpośredniego zapisu
+                    buffer.append((
+                        t_stamp, agv_id, volts, amps,
+                        fl_rpm, fl_temp, fr_rpm, fr_temp,
+                        rl_rpm, rl_temp, rr_rpm, rr_temp,
+                        ax, ay, az, gx, gy, gz
+                    ))
+                except KeyError as e:
+                    print(f"Pominięto starą paczkę. Brak klucza: {e}")
+
+        # ZMIANA 3: Hurtowy zrzut do bazy (Bulk Insert)
+        if len(buffer) >= BATCH_SIZE or (len(buffer) > 0 and not records):
+            try:
+                query = """
+                    INSERT INTO telemetry (
+                        time, agv_id, bus_voltage_v, current_a,
+                        fl_rpm, fl_temp_c, fr_rpm, fr_temp_c,
+                        rl_rpm, rl_temp_c, rr_rpm, rr_temp_c,
+                        accel_x, accel_y, accel_z,
+                        gyro_x, gyro_y, gyro_z
+                    ) VALUES %s
+                """
+                template = "(to_timestamp(%s), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                
+                # Szybki zapis paczki
+                psycopg2.extras.execute_values(cursor, query, buffer, template=template)
+                
+                # Powiadomienie Kafki o sukcesie
+                consumer.commit()
+                buffer.clear()
+            except Exception as e:
+                print(f"Krytyczny błąd zapisu: {e}")
+                buffer.clear()
 
 if __name__ == "__main__":
     start_consumer()
