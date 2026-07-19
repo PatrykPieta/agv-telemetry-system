@@ -20,7 +20,7 @@ KAFKA_TOPIC = 'lidar_topic'
 AGV_ID = "AGV-01"
 
 # Parametry DBSCAN
-EPSILON_M = 0.2    # Maksymalna odległość między punktami w klastrze (20 cm)
+EPSILON_M = 0.2   # Maksymalna odległość między punktami w klastrze (20 cm)
 MIN_SAMPLES = 3    # Minimum punktów, by uznać coś za obiekt, a nie szum
 
 def get_producer():

@@ -73,7 +73,7 @@ def start_emulator():
                 }
             }
         }
-
+        
         producer.send(TOPIC, payload)
         
         print(f"🔄 {mode:<16} | FL:{current_fl:>5.1f} FR:{current_fr:>6.1f} RL:{current_rl:>6.1f} RR:{current_rr:>6.1f}", end='\r', flush=True)
