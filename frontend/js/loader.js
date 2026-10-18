@@ -7,44 +7,40 @@ export class AGVLoader {
     constructor(scene) {
         this.scene = scene;
         this.loader = new GLTFLoader();
-        this.agvModel = null;
     }
 
-    loadModel(url) {
+    /**
+     * Wczytuje model glTF/GLB, automatycznie wyśrodkowuje w osiach X i Z,
+     * stawia koła na podłodze Y=0 i normalizuje rozmiar do zadanego targetSize w metrach.
+     */
+    loadModel(url, targetSize = 2.2, initialPos = { x: 0, y: 0, z: 0 }, groupName = 'AGV_ROOT') {
         return new Promise((resolve, reject) => {
-            const statusEl = document.getElementById('status');
-            if (statusEl) statusEl.textContent = 'Ładowanie modelu 3D AGV (Mecanum)...';
-
             this.loader.load(
                 url,
                 (gltf) => {
                     const model = gltf.scene;
 
-                    // Ukryj zbędne węzły eksportu CAD (np. kamery)
+                    // Ukryj zbędne węzły CAD (kamery, światła)
                     model.traverse(node => {
                         if (SKIP_PATTERNS.some(p => p.test(node.name))) {
                             node.visible = false;
                         }
                     });
 
-                    // Kontener główny (root)
                     const root = new THREE.Group();
-                    root.name = 'AGV_ROOT';
+                    root.name = groupName;
 
                     // Obliczenie rzeczywistych wymiarów modelu
                     const box = new THREE.Box3().setFromObject(model);
                     const center = box.getCenter(new THREE.Vector3());
                     const size = box.getSize(new THREE.Vector3());
-                    console.log('[IDUB Loader] Raw model size:', size, 'center:', center);
 
-                    // Normalizacja skali: AGV powinien mieć długość ~2.2 metra
                     const maxDim = Math.max(size.x, size.z);
-                    const targetSize = 2.2;
                     const scale = (maxDim > 0.001) ? (targetSize / maxDim) : 10.0;
 
                     model.scale.set(scale, scale, scale);
 
-                    // Wyśrodkowanie w osiach X i Z oraz postawienie kół dokładnie na podłodze (Y = 0)
+                    // Wyśrodkowanie wewnątrz grupy root, spód na Y = 0
                     model.position.set(
                         -center.x * scale,
                         -box.min.y * scale,
@@ -52,30 +48,15 @@ export class AGVLoader {
                     );
 
                     root.add(model);
+                    root.position.set(initialPos.x, initialPos.y, initialPos.z);
                     this.scene.add(root);
-                    this.agvModel = root;
 
-                    console.log(`[IDUB Loader] Model załadowany pomyślnie! Skala: ${scale.toFixed(2)}x`);
-                    if (statusEl) statusEl.textContent = 'Model AGV załadowany';
+                    console.log(`[IDUB Loader] Załadowano ${groupName} (${url}): skala ${scale.toFixed(2)}x, rozmiar ${targetSize}m`);
                     resolve(root);
                 },
-                (xhr) => {
-                    if (xhr.total > 0) {
-                        const pct = (xhr.loaded / xhr.total * 100).toFixed(0);
-                        if (statusEl && statusEl.textContent.includes('Ładowanie')) {
-                            statusEl.textContent = `Ładowanie modelu 3D: ${pct}%`;
-                        }
-                    }
-                },
+                null,
                 (error) => {
-                    console.error('[IDUB Loader] Błąd ładowania modelu podstawowego:', error);
-                    // Automatyczny fallback do agv.glb jeśli nowy model nie może się wczytać
-                    if (url !== 'assets/models/agv.glb') {
-                        console.warn('[IDUB Loader] Próba załadowania modelu zapasowego agv.glb...');
-                        this.loadModel('assets/models/agv.glb').then(resolve).catch(reject);
-                        return;
-                    }
-                    if (statusEl) statusEl.textContent = 'Błąd ładowania modelu 3D';
+                    console.error(`[IDUB Loader] Błąd ładowania ${url}:`, error);
                     reject(error);
                 }
             );

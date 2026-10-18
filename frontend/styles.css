@@ -382,6 +382,50 @@ body {
     text-align: right;
 }
 
+/* ===== FLEET CAMERA SELECTOR ===== */
+
+.fleet-camera-bar {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 95;
+    display: flex;
+    gap: 8px;
+    background: rgba(6, 14, 26, 0.88);
+    border: 1px solid #1a3a5a;
+    border-radius: 20px;
+    padding: 6px 12px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+}
+
+.cam-btn {
+    padding: 5px 12px;
+    cursor: pointer;
+    background: #0a1e30;
+    color: #88aacc;
+    border: 1px solid #1a4a6a;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.cam-btn:hover {
+    background: #005fa3;
+    color: #ffffff;
+    border-color: #0099ff;
+}
+
+.cam-btn.active {
+    background: #005fa3;
+    color: #ffffff;
+    border-color: #00d4ff;
+    box-shadow: 0 0 10px rgba(0, 150, 255, 0.4);
+}
+
 /* ===== SCROLLBAR ===== */
 
 .control-panel::-webkit-scrollbar { width: 4px; }
