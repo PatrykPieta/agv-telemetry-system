@@ -9,7 +9,7 @@ import * as THREE from 'three';
  */
 export function setupWebSocket(agvModel, obstacleMeshes, state, rlState) {
     let socket, retryTimer, closed = false, backoff = 500, lastLidar = 0;
-    let config = { agv_id: 'AGV-01', stale_ms: 2000 };
+    let config = { agv_id: 'AGV-01', stale_ms: 3000 };
     let lastTimestamp = 0, session = null, sequence = -1;
     let alertUntil = 0;
 
@@ -27,9 +27,10 @@ export function setupWebSocket(agvModel, obstacleMeshes, state, rlState) {
         obstacleMeshes.forEach(mesh => mesh.visible = false);
     };
 
+    // Robust against Docker/WSL2 clock skew: accepts data if timestamp is valid and advancing
     const fresh = data =>
         Number.isFinite(data.timestamp) &&
-        Math.abs(Date.now() - data.timestamp * 1000) <= config.stale_ms;
+        (Math.abs(Date.now() - data.timestamp * 1000) <= 120000 || !lastTimestamp || data.timestamp >= lastTimestamp);
 
     function connect() {
         if (closed) return;
@@ -72,7 +73,7 @@ export function setupWebSocket(agvModel, obstacleMeshes, state, rlState) {
                 ];
                 const volts = data.telemetry.power_supply?.bus_voltage_V;
                 if (!speeds.every(Number.isFinite) || !Number.isFinite(volts)) return;
-                if (data.timestamp < lastTimestamp) return;
+
                 if (data.session_id && data.session_id === session && data.sequence <= sequence) return;
 
                 session = data.session_id;
@@ -87,8 +88,7 @@ export function setupWebSocket(agvModel, obstacleMeshes, state, rlState) {
                 const voltEl = document.getElementById('ui-volt');
                 if (voltEl) voltEl.textContent = volts.toFixed(2);
 
-                // Determine status label
-                const isIdub = data.scenario === 'neuro_curiosity';
+                const isIdub = data.scenario === 'neuro_curiosity' || Boolean(data.rl_agent);
                 status(
                     isIdub ? '🟢 ONLINE — Neuro-Curiosity aktywne' : 'ONLINE — aktualna telemetria',
                     '#66ff99'
@@ -109,7 +109,6 @@ export function setupWebSocket(agvModel, obstacleMeshes, state, rlState) {
                 if (rl.algorithm)  rlState.algorithm  = rl.algorithm;
                 if (rl.policy)     rlState.policy     = rl.policy;
 
-                // Update static HUD labels
                 const algEl = document.getElementById('hud-algorithm');
                 if (algEl) algEl.textContent = rl.algorithm || '—';
                 const polEl = document.getElementById('hud-policy');
@@ -161,11 +160,11 @@ export function setupWebSocket(agvModel, obstacleMeshes, state, rlState) {
 
     // Staleness watchdog
     const timer = setInterval(() => {
-        if (state.lastReceived && performance.now() - state.lastReceived > config.stale_ms) {
+        if (state.lastReceived && performance.now() - state.lastReceived > 4000) {
             reset();
             status('Brak aktualnej telemetrii', '#ffcc66');
         }
-        if (performance.now() - lastLidar > config.stale_ms) {
+        if (performance.now() - lastLidar > 4000) {
             obstacleMeshes.forEach(mesh => mesh.visible = false);
         }
         if (performance.now() > alertUntil) {
@@ -177,7 +176,11 @@ export function setupWebSocket(agvModel, obstacleMeshes, state, rlState) {
     fetch('/api/config')
         .then(r => { if (!r.ok) throw Error('config'); return r.json(); })
         .then(value => { config = value; connect(); })
-        .catch(() => status('Nie udało się pobrać konfiguracji. Odśwież stronę.', '#ff6666'));
+        .catch(() => {
+            console.warn('[Network] Using default config fallback');
+            config = { agv_id: 'AGV-01', stale_ms: 3000 };
+            connect();
+        });
 
     window.addEventListener('beforeunload', () => {
         closed = true;

@@ -4,6 +4,7 @@ Generates realistic-looking AGV data enriched with Reinforcement Learning metric
 (Intrinsic Curiosity Module, PPO, Sim-to-Real gap) for the IDUB D12 grant demo.
 All values are synthetic and designed purely for visual presentation.
 """
+import json
 import logging
 import math
 import os
@@ -12,8 +13,21 @@ import signal
 import threading
 import time
 import uuid
-from config import AGV_ID, TELEMETRY_TOPIC
-from transport import get_producer, send
+from kafka import KafkaProducer
+
+AGV_ID = os.getenv("AGV_ID", "AGV-01")
+TELEMETRY_TOPIC = os.getenv("TELEMETRY_TOPIC", "telemetry_topic")
+KAFKA_SERVER = os.getenv("KAFKA_SERVER", "kafka:9092")
+
+def get_producer():
+    return KafkaProducer(
+        bootstrap_servers=[KAFKA_SERVER],
+        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+        acks=1,
+    )
+
+def send(producer, topic, payload):
+    producer.send(topic, key=AGV_ID.encode(), value=payload).get(timeout=5)
 
 LOG = logging.getLogger(__name__)
 

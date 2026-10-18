@@ -11,8 +11,8 @@ export function setupEnvironment(scene) {
     scene.background = new THREE.Color(0x03080f);
     scene.fog = new THREE.FogExp2(0x03080f, 0.025);
 
-    // Ambient — very low, industrial
-    const ambientLight = new THREE.AmbientLight(0x1a2a3a, 0.6);
+    // Ambient — bright neutral fill for clear model inspection
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
     scene.add(ambientLight);
 
     // Key light (overhead, cold white)

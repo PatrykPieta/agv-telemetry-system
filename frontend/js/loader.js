@@ -1,29 +1,7 @@
-/**
- * IDUB Neuro-Curiosity AGV Showcase — Loader
- *
- * Loads the AGV_SIM_F.glb model (detailed Mecanum wheel model from CAD export).
- * The model has 51 nodes exported from STEP files; wheel assemblies use Mirror/MirrorMirror prefix.
- * Since STEP->GLB exports don't have clean FL/FR/RL/RR names, we group wheel-related
- * nodes by position (bounding box center X/Z) after loading.
- */
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 
-// Node name patterns for the Mecanum wheel assembly groups in AGV_SIM_F.glb
-const WHEEL_PATTERNS = [
-    /^Mecanum Left v5/i,
-    /^MirrorMirrorMecanum/i,
-    /^MirrorMecanum/i,
-    /^Side\s*[12]/i,
-    /^MirrorMirrorSide/i,
-    /^MirrorSide/i,
-    /^Roller_/i,
-    /^MirrorMirrorRoller/i,
-    /^MirrorRoller/i,
-];
-
-// Camera node to hide (artifact from CAD export)
-const SKIP_PATTERNS = [/^current camera/i];
+const SKIP_PATTERNS = [/camera/i, /light/i];
 
 export class AGVLoader {
     constructor(scene) {
@@ -34,54 +12,73 @@ export class AGVLoader {
 
     loadModel(url) {
         return new Promise((resolve, reject) => {
+            const statusEl = document.getElementById('status');
+            if (statusEl) statusEl.textContent = 'Ładowanie modelu 3D AGV (Mecanum)...';
+
             this.loader.load(
                 url,
                 (gltf) => {
-                    this.agvModel = gltf.scene;
+                    const model = gltf.scene;
 
-                    // Hide camera nodes left in by CAD exporter
-                    this.agvModel.traverse(node => {
+                    // Ukryj zbędne węzły eksportu CAD (np. kamery)
+                    model.traverse(node => {
                         if (SKIP_PATTERNS.some(p => p.test(node.name))) {
                             node.visible = false;
                         }
                     });
 
-                    // Scale: STEP export in mm → Three.js units (1 unit ≈ 1m)
-                    // AGV_SIM_F is approximately 800mm wide, so scale 0.001 → ~0.8m
-                    this.agvModel.scale.set(0.001, 0.001, 0.001);
-                    this.agvModel.position.y = 0;
+                    // Kontener główny (root)
+                    const root = new THREE.Group();
+                    root.name = 'AGV_ROOT';
 
-                    this.scene.add(this.agvModel);
-                    console.log('[IDUB] Model AGV_SIM_F załadowany —', gltf.scene.children.length, 'węzłów głównych');
-                    resolve(this.agvModel);
+                    // Obliczenie rzeczywistych wymiarów modelu
+                    const box = new THREE.Box3().setFromObject(model);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+                    console.log('[IDUB Loader] Raw model size:', size, 'center:', center);
+
+                    // Normalizacja skali: AGV powinien mieć długość ~2.2 metra
+                    const maxDim = Math.max(size.x, size.z);
+                    const targetSize = 2.2;
+                    const scale = (maxDim > 0.001) ? (targetSize / maxDim) : 10.0;
+
+                    model.scale.set(scale, scale, scale);
+
+                    // Wyśrodkowanie w osiach X i Z oraz postawienie kół dokładnie na podłodze (Y = 0)
+                    model.position.set(
+                        -center.x * scale,
+                        -box.min.y * scale,
+                        -center.z * scale
+                    );
+
+                    root.add(model);
+                    this.scene.add(root);
+                    this.agvModel = root;
+
+                    console.log(`[IDUB Loader] Model załadowany pomyślnie! Skala: ${scale.toFixed(2)}x`);
+                    if (statusEl) statusEl.textContent = 'Model AGV załadowany';
+                    resolve(root);
                 },
                 (xhr) => {
                     if (xhr.total > 0) {
-                        const pct = (xhr.loaded / xhr.total * 100).toFixed(1);
-                        console.log(`[IDUB] Ładowanie modelu: ${pct}%`);
+                        const pct = (xhr.loaded / xhr.total * 100).toFixed(0);
+                        if (statusEl && statusEl.textContent.includes('Ładowanie')) {
+                            statusEl.textContent = `Ładowanie modelu 3D: ${pct}%`;
+                        }
                     }
                 },
                 (error) => {
-                    console.error('[IDUB] Błąd ładowania modelu AGV_SIM_F:', error);
+                    console.error('[IDUB Loader] Błąd ładowania modelu podstawowego:', error);
+                    // Automatyczny fallback do agv.glb jeśli nowy model nie może się wczytać
+                    if (url !== 'assets/models/agv.glb') {
+                        console.warn('[IDUB Loader] Próba załadowania modelu zapasowego agv.glb...');
+                        this.loadModel('assets/models/agv.glb').then(resolve).catch(reject);
+                        return;
+                    }
+                    if (statusEl) statusEl.textContent = 'Błąd ładowania modelu 3D';
                     reject(error);
                 }
             );
         });
-    }
-
-    /**
-     * Collect mesh nodes that belong to wheel assemblies.
-     * Returns array of Three.js Object3D to be animated.
-     */
-    collectWheelMeshes() {
-        const wheels = [];
-        if (!this.agvModel) return wheels;
-        this.agvModel.traverse(node => {
-            if (node.isMesh && WHEEL_PATTERNS.some(p => p.test(node.name))) {
-                wheels.push(node);
-            }
-        });
-        console.log('[IDUB] Znaleziono węzłów kół Mecanum:', wheels.length);
-        return wheels;
     }
 }

@@ -6,7 +6,7 @@ import { setupEnvironment } from './environment.js';
 import { setupGUI } from './gui.js';
 import { updatePhysics } from './physics.js';
 import { setupWebSocket } from './network.js';
-import { setupCuriosityViz, updateCuriosityViz } from './curiosity_viz.js';
+import { setupCuriosityViz, updateCuriosityViz, appendTrailPoint } from './curiosity_viz.js';
 
 const container = document.getElementById('scene-container');
 let scene, camera, renderer, controls;
@@ -33,19 +33,19 @@ const rlState = {
 };
 
 let materialChassis;
+let curiosityViz = null;
+let guiInstance = null;
 
 // Zmienne wydajnościowe
 let lastFpsTime = performance.now();
 let framesThisSecond = 0;
 let currentFPS = 0;
 
-// Curiosity viz objects (populated after model loads)
-let curiosityViz = null;
-
 function init() {
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.05, 500);
-    camera.position.set(3, 2, 5);
+    camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 1000);
+    // Dobra pozycja startowa kamery — widok z ukosa na wózek
+    camera.position.set(3.5, 2.5, 4.5);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -54,17 +54,18 @@ function init() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = 1.3;
 
     const envLights = setupEnvironment(scene);
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.zoomSpeed = 0.5;
+    controls.zoomSpeed = 0.6;
     controls.maxDistance = 80;
-    controls.minDistance = 0.5;
+    controls.minDistance = 1.0;
     controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    controls.target.set(0, 0.4, 0);
 
     setupCameraToggle();
     setupObstaclePool();
@@ -75,63 +76,66 @@ function init() {
             agvModel = model;
             window.agvModel = model;
 
-            // Apply industrial PBR materials
+            // Wyraziste materiały PBR — stalowy tytan + szafirowy akcent AGH + polerowane aluminium
             materialChassis = new THREE.MeshStandardMaterial({
-                color: 0x1a2a3a,       // Dark industrial blue-grey
-                metalness: 0.7,
+                color: 0x3a4856,       // Tytanowy grafit
+                metalness: 0.75,
                 roughness: 0.3,
             });
             const materialWheel = new THREE.MeshStandardMaterial({
-                color: 0x222222,
-                metalness: 0.4,
-                roughness: 0.6,
+                color: 0xcccccc,       // Frezowane aluminium
+                metalness: 0.85,
+                roughness: 0.2,
             });
             const materialRoller = new THREE.MeshStandardMaterial({
-                color: 0x333333,
-                metalness: 0.2,
-                roughness: 0.8,
+                color: 0x181818,       // Gumowe rolki Mecanum
+                metalness: 0.1,
+                roughness: 0.9,
             });
             const materialAccent = new THREE.MeshStandardMaterial({
-                color: 0x005fa3,       // AGH blue accent
-                metalness: 0.5,
-                roughness: 0.4,
-                emissive: new THREE.Color(0x001a30),
-                emissiveIntensity: 0.3,
+                color: 0x0077cc,       // Szafir AGH
+                metalness: 0.6,
+                roughness: 0.35,
+                emissive: new THREE.Color(0x002244),
+                emissiveIntensity: 0.5,
             });
 
             agvModel.traverse(node => {
                 if (!node.isMesh) return;
                 node.castShadow = true;
                 node.receiveShadow = true;
-                const n = node.name;
-                if (/Roller_/i.test(n) || /MirrorRoller/i.test(n) || /MirrorMirrorRoller/i.test(n)) {
+                const n = node.name.toLowerCase();
+
+                if (n.includes('roller')) {
                     node.material = materialRoller;
                     wheelMeshes.push(node);
-                } else if (/Mecanum/i.test(n) || /Side\s*[12]/i.test(n)) {
+                } else if (n.includes('mecanum') || n.includes('side') || n.includes('wheel') || n.includes('kolo')) {
                     node.material = materialWheel;
                     wheelMeshes.push(node);
-                } else if (/Mirror/i.test(n)) {
+                } else if (n.includes('mirror')) {
                     node.material = materialWheel;
                     wheelMeshes.push(node);
                 } else {
-                    // Alternate chassis vs accent by mesh index for visual interest
-                    node.material = (node.id % 3 === 0) ? materialAccent : materialChassis;
+                    node.material = (node.id % 2 === 0) ? materialChassis : materialAccent;
                 }
             });
 
-            console.log('[IDUB] Wheel meshes found:', wheelMeshes.length);
+            console.log(`[IDUB] Przypisano materiały, siatek kół Mecanum: ${wheelMeshes.length}`);
 
-            // Setup curiosity visualization overlay on the AGV
+            // Nakładka wizualizacji Neuro-Curiosity (ringi, stożek, trajektoria)
             curiosityViz = setupCuriosityViz(scene, agvModel);
 
-            setupGUI(envLights.ambientLight, envLights.directionalLight, envLights.floorMaterial, materialChassis);
+            guiInstance = setupGUI(envLights.ambientLight, envLights.directionalLight, envLights.floorMaterial, materialChassis);
+            setupSceneOptionsButton();
+
             setupWebSocket(agvModel, obstacleMeshes, rpmsState, rlState);
 
             animate();
         })
         .catch(error => {
-            console.error('[IDUB] Błąd ładowania modelu', error);
-            document.getElementById('status').textContent = 'Błąd ładowania modelu 3D';
+            console.error('[IDUB] Błąd inicjalizacji modelu:', error);
+            const statusEl = document.getElementById('status');
+            if (statusEl) statusEl.textContent = 'Błąd wczytywania modelu 3D';
         });
 }
 
@@ -152,7 +156,19 @@ function setupCameraToggle() {
             }
         } else {
             btn.innerText = '🔒 Podążaj za wózkiem';
-            btn.style.color = '#00ff00';
+            btn.style.color = '#00ff99';
+        }
+    });
+}
+
+function setupSceneOptionsButton() {
+    const btn = document.getElementById('scene-options');
+    if (!btn || !guiInstance) return;
+    btn.addEventListener('click', () => {
+        if (guiInstance._hidden) {
+            guiInstance.show();
+        } else {
+            guiInstance.hide();
         }
     });
 }
@@ -163,9 +179,9 @@ function setupObstaclePool() {
         const mat = new THREE.MeshStandardMaterial({
             color: 0xff6600,
             transparent: true,
-            opacity: 0.75,
+            opacity: 0.8,
             emissive: new THREE.Color(0x331400),
-            emissiveIntensity: 0.5,
+            emissiveIntensity: 0.6,
         });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.visible = false;
@@ -204,7 +220,6 @@ function updateRLHUD() {
         if (el) { el.textContent = val; el.style.color = color; }
     }
 
-    // Progress bars
     _bar('bar-intrinsic', rlState.intrinsic_reward);
     _bar('bar-icm-error', rlState.icm_prediction_error);
     _bar('bar-gap',       rlState.sim_to_real_gap);
@@ -228,9 +243,8 @@ function updateFPS() {
     if (el) {
         el.innerHTML =
             `FPS: ${currentFPS}<br>` +
-            `DRAW CALLS: ${renderer.info.render.calls}<br>` +
-            `TRIANGLES: ${renderer.info.render.triangles.toLocaleString()}<br>` +
-            `MESHES: ${renderer.info.memory.geometries}`;
+            `DRAWS: ${renderer.info.render.calls}<br>` +
+            `TRIS: ${renderer.info.render.triangles.toLocaleString()}`;
     }
 }
 
@@ -251,10 +265,16 @@ function animate(frameTime = performance.now()) {
     updateClock();
 
     if (agvModel) {
+        // Fizyka ruchu wózka i obrót kół
         updatePhysics(agvModel, wheelMeshes, rpmsState, dt);
 
-        if (curiosityViz) updateCuriosityViz(curiosityViz, rlState, dt);
+        // Aktualizacja efektów kognitywnych i śladu
+        if (curiosityViz) {
+            updateCuriosityViz(curiosityViz, rlState, dt);
+            appendTrailPoint(curiosityViz, agvModel);
+        }
 
+        // Płynne podążanie kamery za wózkiem
         if (followCamera) {
             const target = new THREE.Vector3();
             agvModel.getWorldPosition(target);
@@ -269,11 +289,6 @@ function animate(frameTime = performance.now()) {
 
     controls.update();
     renderer.render(scene, camera);
-
-    if (Math.abs(camera.position.x) > 2000 || isNaN(camera.position.x)) {
-        console.error('AWARIA KAMERY:', camera.position);
-        controls.enabled = false;
-    }
 }
 
 init();
