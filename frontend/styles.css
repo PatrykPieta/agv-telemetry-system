@@ -23,7 +23,7 @@ body {
 
 .app-container {
     display: grid;
-    grid-template-columns: 1fr 300px;
+    grid-template-columns: 1fr 340px;
     height: 100vh;
     width: 100vw;
 }
@@ -322,24 +322,51 @@ body {
 }
 
 .grafana-card {
-    background: #0a1825;
-    border: 1px solid #102030;
-    border-radius: 7px;
-    padding: 8px 10px;
+    background: #09131f;
+    border: 1px solid #14283c;
+    border-radius: 8px;
+    padding: 10px 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.grafana-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
 }
 
 .grafana-card h4 {
     font-size: 11px;
-    color: #4a7a9a;
-    letter-spacing: 0.5px;
-    margin-bottom: 6px;
+    color: #7ab3df;
+    letter-spacing: 0.8px;
     font-weight: 600;
     text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+}
+
+.card-badge {
+    font-size: 10px;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    color: #00ffaa;
+    background: rgba(0, 255, 170, 0.1);
+    border: 1px solid rgba(0, 255, 170, 0.3);
+    padding: 2px 7px;
+    border-radius: 4px;
 }
 
 .grafana-card iframe {
-    border-radius: 4px;
+    width: 100%;
+    height: 180px;
+    border: none;
+    border-radius: 6px;
     display: block;
+    overflow: hidden;
+    background: #070e17;
 }
 
 /* ===== GRANT INFO CARD ===== */

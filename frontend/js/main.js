@@ -4,7 +4,7 @@ import { AGVLoader } from './loader.js';
 
 import { setupEnvironment } from './environment.js';
 import { setupGUI } from './gui.js';
-import { updatePhysics, updateBaselinePhysics } from './physics.js';
+import { updatePhysics, updateBaselinePhysics, resolveFleetCollisions } from './physics.js';
 import { setupWebSocket } from './network.js';
 import { setupCuriosityViz, updateCuriosityViz, appendTrailPoint } from './curiosity_viz.js';
 
@@ -372,7 +372,12 @@ function animate(frameTime = performance.now()) {
 
     // 2. Aktualizacja AGV-02 (Baseline Agent / Badania porównawcze)
     if (agv02Model) {
-        updateBaselinePhysics(agv02Model, wheelMeshes02, dt, agv01Model);
+        updateBaselinePhysics(agv02Model, wheelMeshes02, dt);
+    }
+
+    // 3. Fizyczna blokada przenikania modeli (antykolizja)
+    if (agv01Model && agv02Model) {
+        resolveFleetCollisions(agv01Model, agv02Model, dt);
     }
 
     // 3. Obsługa kamery w zależności od wybranego trybu

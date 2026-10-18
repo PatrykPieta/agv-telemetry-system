@@ -155,21 +155,33 @@
             <h2 style="margin:4px 0 2px">KOKPIT OPERATORSKI</h2>
             <div style="font-size:10px; color:#005fa3; letter-spacing:1px">IIoT Edge Computing Platform · IDUB D12</div>
         </div>
-        <hr style="border-color:#222; margin:8px 0">
+        <hr style="border-color:#16283c; margin:6px 0">
 
+        <!-- KARTA 1: RPM KÓŁ -->
         <div class="grafana-card">
-            <h4>📈 Prędkość Obrotowa Kół (RPM)</h4>
-            <iframe data-panel="8" title="Prędkości kół" width="100%" height="200" frameborder="0"></iframe>
+            <div class="grafana-card-header">
+                <h4>📈 Prędkość Kół (RPM)</h4>
+                <span id="card-rpm-val" class="card-badge">120.0 RPM</span>
+            </div>
+            <iframe data-panel="8" title="Prędkości kół" width="100%" height="180" frameborder="0" scrolling="no"></iframe>
         </div>
 
+        <!-- KARTA 2: TEMPERATURA SILNIKÓW -->
         <div class="grafana-card">
-            <h4>🌡 Temperatura Silników (°C)</h4>
-            <iframe data-panel="9" title="Temperatury silników" width="100%" height="200" frameborder="0"></iframe>
+            <div class="grafana-card-header">
+                <h4>🌡 Temp. Silników (°C)</h4>
+                <span id="card-temp-val" class="card-badge">42.8 °C</span>
+            </div>
+            <iframe data-panel="9" title="Temperatury silników" width="100%" height="180" frameborder="0" scrolling="no"></iframe>
         </div>
 
+        <!-- KARTA 3: ZASILANIE MAGISTRALI -->
         <div class="grafana-card">
-            <h4>⚡ Napięcie i Pobór Prądu</h4>
-            <iframe data-panel="10" title="Napięcie i prąd" width="100%" height="200" frameborder="0"></iframe>
+            <div class="grafana-card-header">
+                <h4>⚡ Napięcie i Pobór Mocy</h4>
+                <span id="card-pwr-val" class="card-badge">48.1 V | 2.6 A</span>
+            </div>
+            <iframe data-panel="2" title="Napięcie i prąd" width="100%" height="180" frameborder="0" scrolling="no"></iframe>
         </div>
 
         <!-- Static info panel for grant context -->
@@ -178,6 +190,10 @@
             <div class="grant-info-row">
                 <span class="grant-label">Algorytm:</span>
                 <span class="grant-value">PPO z ICM (Intrinsic Curiosity)</span>
+            </div>
+            <div class="grant-info-row">
+                <span class="grant-label">Porównanie:</span>
+                <span class="grant-value">AGV-01 (ICM) vs AGV-02 (ε-Greedy)</span>
             </div>
             <div class="grant-info-row">
                 <span class="grant-label">Transfer:</span>
@@ -192,12 +208,8 @@
                 <span class="grant-value">Mecanum (holonomiczny)</span>
             </div>
             <div class="grant-info-row">
-                <span class="grant-label">Monitoring:</span>
-                <span class="grant-value">Edge Computing + TimescaleDB</span>
-            </div>
-            <div class="grant-info-row">
-                <span class="grant-label">Cel pracy:</span>
-                <span class="grant-value">Autonomiczna eksploracja magazynu</span>
+                <span class="grant-label">Baza danych:</span>
+                <span class="grant-value">TimescaleDB Hypertable + Spark</span>
             </div>
         </div>
     </div>
@@ -206,19 +218,36 @@
 
 <script type="module" src="js/main.js"></script>
 <script type="module">
-    const config = await fetch('/api/config').then(r => r.json()).catch(() => ({ agv_id: 'AGV-01' }));
-    document.querySelectorAll('iframe[data-panel]').forEach(frame => {
-        const url = new URL('/d-solo/agv-system/agv', location.href);
-        url.port = '3000';
-        url.search = new URLSearchParams({
-            orgId: '1', from: 'now-5m', to: 'now',
-            panelId: frame.dataset.panel,
-            refresh: '5s',
-            'var-agv': config.agv_id,
-            theme: 'dark',
+    async function loadGrafanaPanels() {
+        let uid = 'advbjcq'; // Domyślny istniejący dashboard w Grafanie
+        try {
+            const search = await fetch('http://' + location.hostname + ':3000/api/search').then(r => r.json());
+            const db = search.find(d => d.type === 'dash-db');
+            if (db && db.uid) uid = db.uid;
+        } catch (e) {
+            console.warn('[Grafana] Auto-wykrywanie UID, używam:', uid);
+        }
+
+        const config = await fetch('/api/config').then(r => r.json()).catch(() => ({ agv_id: 'AGV-01' }));
+
+        document.querySelectorAll('iframe[data-panel]').forEach(frame => {
+            const panelId = frame.dataset.panel;
+            const url = new URL('/d-solo/' + uid + '/agv', location.href);
+            url.port = '3000';
+            url.search = new URLSearchParams({
+                orgId: '1',
+                from: 'now-5m',
+                to: 'now',
+                panelId: panelId,
+                refresh: '5s',
+                theme: 'dark',
+                kiosk: '1',
+                'var-agv': config.agv_id
+            });
+            frame.src = url.href;
         });
-        frame.src = url.href;
-    });
+    }
+    loadGrafanaPanels();
 </script>
 </body>
 </html>

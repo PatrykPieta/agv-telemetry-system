@@ -88,6 +88,21 @@ export function setupWebSocket(agvModel, obstacleMeshes, state, rlState) {
                 const voltEl = document.getElementById('ui-volt');
                 if (voltEl) voltEl.textContent = volts.toFixed(2);
 
+                // Aktualizacja plakietek w prawym kokpicie
+                const cardRpm = document.getElementById('card-rpm-val');
+                if (cardRpm) cardRpm.textContent = `${Math.abs(speeds[0]).toFixed(1)} RPM`;
+
+                const cardTemp = document.getElementById('card-temp-val');
+                if (cardTemp && m.front_left?.temp_C) {
+                    cardTemp.textContent = `${m.front_left.temp_C.toFixed(1)} °C`;
+                }
+
+                const cardPwr = document.getElementById('card-pwr-val');
+                if (cardPwr) {
+                    const cur = data.telemetry.power_supply?.current_A ?? 2.5;
+                    cardPwr.textContent = `${volts.toFixed(1)}V | ${cur.toFixed(1)}A`;
+                }
+
                 const isIdub = data.scenario === 'neuro_curiosity' || Boolean(data.rl_agent);
                 status(
                     isIdub ? '🟢 ONLINE — Neuro-Curiosity aktywne' : 'ONLINE — aktualna telemetria',
