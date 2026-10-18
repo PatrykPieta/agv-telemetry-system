@@ -1,79 +1,188 @@
-export function setupWebSocket(agvModel, obstacleMeshes, rpmsState) {
-    const ws = new WebSocket(`ws://${window.location.host}/ws`);
+import * as THREE from 'three';
 
-    ws.onopen = () => {
-        const statusEl = document.getElementById('status');
-        if (statusEl) {
-            statusEl.innerText = "ONLINE";
-            statusEl.className = "";
-            statusEl.style.color = "#00ff00";
-        }
+/**
+ * IDUB Neuro-Curiosity Showcase — WebSocket network module.
+ *
+ * Extends the base AGV telemetry handler to also parse and distribute
+ * rl_agent fields (intrinsic_reward, ICM error, jerk, etc.) from the
+ * IDUB synthetic emulator. Backwards-compatible with the original emulator.
+ */
+export function setupWebSocket(agvModel, obstacleMeshes, state, rlState) {
+    let socket, retryTimer, closed = false, backoff = 500, lastLidar = 0;
+    let config = { agv_id: 'AGV-01', stale_ms: 2000 };
+    let lastTimestamp = 0, session = null, sequence = -1;
+    let alertUntil = 0;
+
+    const status = (text, color) => {
+        const el = document.getElementById('status');
+        if (el) { el.textContent = text; el.style.color = color; }
     };
 
-    ws.onmessage = (event) => {
-        let data;
-        try {
-            data = JSON.parse(event.data);
-        } catch (error) {
-            return; // Śmieciowa paczka, ignorujemy po cichu
+    const reset = () => {
+        Object.assign(state, { FL: 0, FR: 0, RL: 0, RR: 0, lastReceived: 0 });
+        for (const id of ['ui-rpm', 'ui-volt']) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '—';
         }
+        obstacleMeshes.forEach(mesh => mesh.visible = false);
+    };
 
-        // ALARMY BIG DATA
-        if (data.ALERT_MSG) {
-            console.warn("🔥 ALARM Z SYSTEMU BIG DATA:", data.ALERT_MSG);
-            const statusEl = document.getElementById('status');
-            if (statusEl) {
-                statusEl.innerText = "🔥 ZATARCIE KOŁA!";
-                statusEl.style.color = "#ff0000";
+    const fresh = data =>
+        Number.isFinite(data.timestamp) &&
+        Math.abs(Date.now() - data.timestamp * 1000) <= config.stale_ms;
+
+    function connect() {
+        if (closed) return;
+        socket = new WebSocket(
+            `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`
+        );
+
+        socket.onopen = () => {
+            backoff = 500;
+            status('Połączono — oczekiwanie na dane', '#ffcc66');
+        };
+
+        socket.onmessage = event => {
+            let data;
+            try {
+                data = JSON.parse(event.data);
+                data = data.payload ?? data;
+            } catch {
+                return;
             }
-            if (agvModel) {
-                agvModel.traverse(node => {
-                    if (node.isMesh && (!node.name.toLowerCase().includes('koło') && !node.name.toLowerCase().includes('wheel'))) {
-                        node.material.color.setHex(0xff0000);
-                    }
+
+            if (!data || data.agv_id !== config.agv_id || !fresh(data)) return;
+
+            // Alert messages from Spark
+            if (data.ALERT_MSG) {
+                alertUntil = performance.now() + 3000;
+                const el = document.getElementById('ui-alert');
+                if (el) el.textContent = '⚠️ ' + data.ALERT_MSG;
+                return;
+            }
+
+            // --- Standard telemetry (motor RPM + power) ---
+            if (data.telemetry?.motors) {
+                const m = data.telemetry.motors;
+                const speeds = [
+                    m.front_left?.speed_rpm,
+                    m.front_right?.speed_rpm,
+                    m.rear_left?.speed_rpm,
+                    m.rear_right?.speed_rpm,
+                ];
+                const volts = data.telemetry.power_supply?.bus_voltage_V;
+                if (!speeds.every(Number.isFinite) || !Number.isFinite(volts)) return;
+                if (data.timestamp < lastTimestamp) return;
+                if (data.session_id && data.session_id === session && data.sequence <= sequence) return;
+
+                session = data.session_id;
+                sequence = data.sequence;
+                lastTimestamp = data.timestamp;
+
+                [state.FL, state.FR, state.RL, state.RR] = speeds;
+                state.lastReceived = performance.now();
+
+                const rpmEl = document.getElementById('ui-rpm');
+                if (rpmEl) rpmEl.textContent = speeds[0].toFixed(1);
+                const voltEl = document.getElementById('ui-volt');
+                if (voltEl) voltEl.textContent = volts.toFixed(2);
+
+                // Determine status label
+                const isIdub = data.scenario === 'neuro_curiosity';
+                status(
+                    isIdub ? '🟢 ONLINE — Neuro-Curiosity aktywne' : 'ONLINE — aktualna telemetria',
+                    '#66ff99'
+                );
+            }
+
+            // --- IDUB RL agent telemetry ---
+            if (data.rl_agent && rlState) {
+                const rl = data.rl_agent;
+                if (Number.isFinite(rl.intrinsic_reward))     rlState.intrinsic_reward     = rl.intrinsic_reward;
+                if (Number.isFinite(rl.extrinsic_reward))     rlState.extrinsic_reward     = rl.extrinsic_reward;
+                if (Number.isFinite(rl.total_reward))         rlState.total_reward         = rl.total_reward;
+                if (Number.isFinite(rl.icm_prediction_error)) rlState.icm_prediction_error = rl.icm_prediction_error;
+                if (Number.isFinite(rl.policy_entropy))       rlState.policy_entropy       = rl.policy_entropy;
+                if (Number.isFinite(rl.jerk_mps3))            rlState.jerk_mps3            = rl.jerk_mps3;
+                if (Number.isFinite(rl.sim_to_real_gap))      rlState.sim_to_real_gap      = rl.sim_to_real_gap;
+                if (Number.isFinite(rl.training_step))        rlState.training_step        = rl.training_step;
+                if (rl.algorithm)  rlState.algorithm  = rl.algorithm;
+                if (rl.policy)     rlState.policy     = rl.policy;
+
+                // Update static HUD labels
+                const algEl = document.getElementById('hud-algorithm');
+                if (algEl) algEl.textContent = rl.algorithm || '—';
+                const polEl = document.getElementById('hud-policy');
+                if (polEl) polEl.textContent = rl.policy || '—';
+                const modeEl = document.getElementById('hud-mode');
+                if (modeEl) modeEl.textContent = rl.mode || '—';
+                const platEl = document.getElementById('hud-platform');
+                if (platEl) platEl.textContent = rl.platform || '—';
+            }
+
+            // --- LiDAR obstacles ---
+            if (Array.isArray(data.obstacles)) {
+                obstacleMeshes.forEach(mesh => mesh.visible = false);
+                agvModel.updateMatrixWorld(true);
+                const origin = new THREE.Vector3();
+                const rotation = new THREE.Quaternion();
+                agvModel.getWorldPosition(origin);
+                agvModel.getWorldQuaternion(rotation);
+
+                data.obstacles.slice(0, obstacleMeshes.length).forEach((obs, i) => {
+                    if (
+                        ![obs.center_x_m, obs.center_y_m, obs.size_m].every(Number.isFinite) ||
+                        obs.size_m <= 0
+                    ) return;
+                    const cube = obstacleMeshes[i];
+                    cube.position
+                        .set(obs.center_x_m, 0.5, -obs.center_y_m)
+                        .applyQuaternion(rotation)
+                        .add(origin);
+                    cube.quaternion.copy(rotation);
+                    cube.scale.set(obs.size_m, 1, obs.size_m);
+                    cube.visible = true;
                 });
+                lastLidar = performance.now();
             }
-            return;
+        };
+
+        socket.onerror = () => socket.close();
+
+        socket.onclose = () => {
+            reset();
+            status('Rozłączono — ponawianie połączenia', '#ff6666');
+            if (!closed) {
+                retryTimer = setTimeout(connect, backoff);
+                backoff = Math.min(backoff * 2, 10000);
+            }
+        };
+    }
+
+    // Staleness watchdog
+    const timer = setInterval(() => {
+        if (state.lastReceived && performance.now() - state.lastReceived > config.stale_ms) {
+            reset();
+            status('Brak aktualnej telemetrii', '#ffcc66');
         }
-
-        // TELEMETRIA
-        if (data.telemetry && data.telemetry.motors) {
-            const rpmEl = document.getElementById('ui-rpm');
-            const voltEl = document.getElementById('ui-volt');
-            if (rpmEl) rpmEl.innerText = data.telemetry.motors.front_left.speed_rpm;
-            if (voltEl) voltEl.innerText = data.telemetry.power_supply.bus_voltage_V;
-
-            // Zapisujemy prędkości do globalnego obiektu stanu
-            rpmsState.FL = data.telemetry.motors.front_left.speed_rpm;
-            rpmsState.FR = data.telemetry.motors.front_right.speed_rpm;
-            rpmsState.RL = data.telemetry.motors.rear_left.speed_rpm;
-            rpmsState.RR = data.telemetry.motors.rear_right.speed_rpm;
-        }
-
-        // PRZESZKODY (LiDAR / DBSCAN)
-        if (data.obstacles) {
+        if (performance.now() - lastLidar > config.stale_ms) {
             obstacleMeshes.forEach(mesh => mesh.visible = false);
-            for (let i = 0; i < data.obstacles.length; i++) {
-                if (i >= obstacleMeshes.length) break;
-
-                const obs = data.obstacles[i];
-                const cube = obstacleMeshes[i];
-
-                cube.scale.set(obs.size_m, 1, obs.size_m);
-                cube.position.set(obs.center_x_m, 0.5, -obs.center_y_m);
-
-                if (obs.avg_reflectivity > 200) {
-                    cube.material.color.setHex(0xffaa00);
-                    cube.material.opacity = 0.9;
-                } else if (obs.avg_reflectivity > 100) {
-                    cube.material.color.setHex(0xaaaaaa);
-                    cube.material.opacity = 0.7;
-                } else {
-                    cube.material.color.setHex(0x444444);
-                    cube.material.opacity = 0.5;
-                }
-                cube.visible = true;
-            }
         }
-    };
+        if (performance.now() > alertUntil) {
+            const el = document.getElementById('ui-alert');
+            if (el) el.textContent = 'Brak bieżących ostrzeżeń';
+        }
+    }, 250);
+
+    fetch('/api/config')
+        .then(r => { if (!r.ok) throw Error('config'); return r.json(); })
+        .then(value => { config = value; connect(); })
+        .catch(() => status('Nie udało się pobrać konfiguracji. Odśwież stronę.', '#ff6666'));
+
+    window.addEventListener('beforeunload', () => {
+        closed = true;
+        clearInterval(timer);
+        clearTimeout(retryTimer);
+        socket?.close();
+    }, { once: true });
 }

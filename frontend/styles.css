@@ -1,118 +1,389 @@
-body {
+/* ============================================================
+   IDUB Neuro-Curiosity AGV Showcase — styles.css
+   Dark industrial theme, AGH-branded with neon accents.
+   ============================================================ */
+
+*, *::before, *::after {
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
-    overflow: hidden; /* Zapobiega paskom przewijania */
-    font-family: sans-serif;
-    background-color: #1a1a1a; /* Ciemne tło, dobry kontrast dla modelu */
-    color: white;
-    width: 100%;
-    height: 100%;
 }
 
-/* --- Nowy elastyczny układ Flexbox (Podział ekranu side-by-side) --- */
-.app-container {
-    display: flex;
-    width: 100vw;
+body {
+    background: #0a0e14;
+    color: #cdd6e0;
+    font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+    font-size: 13px;
+    overflow: hidden;
     height: 100vh;
+    width: 100vw;
 }
 
-/* Lewy panel (Twoja scena 3D + oryginalna nakładka) */
+/* ===== LAYOUT ===== */
+
+.app-container {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    height: 100vh;
+    width: 100vw;
+}
+
 .left-pane {
-    flex: 65; /* Zajmuje dokładnie 65% szerokości ekranu */
-    height: 100%;
-    position: relative; /* Kluczowe, by #info-overlay pozycjonował się wewnątrz tej sekcji */
+    position: relative;
+    overflow: hidden;
+    background: #05080d;
 }
 
-/* Twoje oryginalne scene-container - teraz skaluje się elastycznie w lewym panelu */
 #scene-container {
     width: 100%;
     height: 100%;
 }
 
-/* Twoja oryginalna nakładka tekstowa z zachowanym wyglądem */
-#info-overlay {
+/* ===== IDUB TOP BANNER ===== */
+
+.idub-banner {
     position: absolute;
-    top: 20px;
-    left: 20px;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 15px;
-    border-radius: 8px;
-    pointer-events: none; /* Kliknięcia przechodzą do sceny 3D */
-    z-index: 10;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 7px 16px;
+    background: linear-gradient(90deg, rgba(0,20,50,0.95) 0%, rgba(0,40,90,0.85) 50%, rgba(0,20,50,0.95) 100%);
+    border-bottom: 1px solid #005fa3;
+    backdrop-filter: blur(4px);
 }
 
-#info-overlay h1 {
-    margin-top: 0;
-    font-size: 1.2rem;
+.banner-logo {
+    font-size: 11px;
+    font-weight: 700;
+    color: #005fa3;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    white-space: nowrap;
 }
 
-/* Twój oryginalny styl statusu offline */
-.status-offline {
-    color: #ff4d4d;
-    font-weight: bold;
+.banner-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e8f4ff;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    flex: 1;
+    text-align: center;
 }
 
-/* --- Prawy panel operatorski: Integracja z Grafaną --- */
-.control-panel {
-    flex: 35; /* Zajmuje dokładnie 35% szerokości ekranu */
+.banner-grant {
+    font-size: 10px;
+    color: #4a8fc0;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+/* ===== STATUS BADGE (top, under banner) ===== */
+
+.status-badge {
+    position: absolute;
+    top: 38px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 99;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid #1a3a5a;
+    border-radius: 20px;
+    padding: 3px 14px;
+    font-size: 11px;
+    color: #7a9ab8;
+    white-space: nowrap;
+}
+
+.status-offline { color: #ff6666; font-weight: 600; }
+.status-online  { color: #66ff99; font-weight: 600; }
+
+/* ===== RL COGNITIVE HUD (left side, over 3D view) ===== */
+
+.rl-hud {
+    position: absolute;
+    top: 65px;
+    left: 12px;
+    z-index: 90;
+    width: 230px;
+    background: rgba(6, 14, 26, 0.90);
+    border: 1px solid #0a4a7a;
+    border-radius: 10px;
+    padding: 12px 14px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 0 20px rgba(0, 95, 163, 0.25);
+}
+
+.hud-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.hud-icon {
+    font-size: 22px;
+    line-height: 1;
+}
+
+.hud-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #c8e8ff;
+    letter-spacing: 0.5px;
+}
+
+.hud-sub {
+    font-size: 10px;
+    color: #557799;
+    line-height: 1.5;
+}
+
+.hud-badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 5px;
+}
+
+.mode-badge {
+    font-size: 9.5px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.mode-badge.sim  { background: rgba(0,80,160,0.35); border: 1px solid #0066bb; color: #88ccff; }
+.mode-badge.real { background: rgba(160,80,0,0.25); border: 1px solid #aa5500; color: #ffaa66; }
+
+.hud-divider {
+    border: none;
+    border-top: 1px solid #0d2a40;
+    margin: 7px 0;
+}
+
+.hud-section-label {
+    font-size: 9px;
+    color: #335577;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+    font-weight: 700;
+}
+
+.hud-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 2px;
+}
+
+.hud-label {
+    font-size: 10.5px;
+    color: #778899;
+}
+.hud-label em {
+    color: #445566;
+    font-style: normal;
+}
+
+.hud-value {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: #aaddcc;
+    min-width: 48px;
+    text-align: right;
+}
+
+.hud-val-blue   { color: #44aaff; }
+.hud-val-yellow { color: #ffdd44; }
+.hud-val-dim    { color: #445566; font-size: 9px; }
+
+/* Progress bars */
+.hud-bar-track {
+    width: 100%;
+    height: 3px;
+    background: #0d1e2e;
+    border-radius: 2px;
+    margin-bottom: 6px;
+    overflow: hidden;
+}
+.hud-bar {
     height: 100%;
-    background-color: #111217; /* Kolor tła dopasowany fabrycznie do ciemnej Grafany */
-    border-left: 2px solid #2d2d2d;
-    padding: 20px;
-    box-sizing: border-box;
+    width: 0%;
+    border-radius: 2px;
+    transition: width 0.15s ease;
+}
+.bar-yellow { background: linear-gradient(90deg, #aa7700, #ffdd00); }
+.bar-red    { background: linear-gradient(90deg, #550000, #ff3333); }
+.bar-blue   { background: linear-gradient(90deg, #003366, #0088ff); }
+.bar-purple { background: linear-gradient(90deg, #330055, #aa44ff); }
+
+/* ===== AGV MINI HUD (bottom-left) ===== */
+
+.agv-mini-hud {
+    position: absolute;
+    bottom: 14px;
+    left: 12px;
+    z-index: 90;
+    background: rgba(6, 14, 26, 0.85);
+    border: 1px solid #1a3a5a;
+    border-radius: 8px;
+    padding: 10px 12px;
+    backdrop-filter: blur(6px);
+    min-width: 185px;
+}
+
+.mini-title {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: #335577;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+
+.mini-val {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    color: #00ff99;
+}
+
+.mini-alert {
+    font-size: 10.5px;
+    color: #557799;
+    margin-top: 4px;
+    min-height: 16px;
+}
+
+.mini-btn {
+    margin-top: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    background: #0a1e30;
+    color: #4a9acc;
+    border: 1px solid #1a4a6a;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+    transition: all 0.15s;
+}
+.mini-btn:hover {
+    background: #0d2a40;
+    color: #88ccff;
+    border-color: #2a6a9a;
+}
+
+/* ===== PERFORMANCE MONITOR ===== */
+
+.perf-monitor {
+    position: absolute;
+    top: 65px;
+    right: 12px;
+    z-index: 90;
+    color: #335577;
+    background: rgba(0,0,0,0.6);
+    padding: 7px 10px;
+    font-family: 'Courier New', monospace;
+    border-radius: 5px;
+    border: 1px solid #0d2a3a;
+    font-size: 11px;
+    pointer-events: none;
+    line-height: 1.5;
+}
+
+/* ===== RIGHT PANEL ===== */
+
+.control-panel {
+    background: #07101a;
+    border-left: 1px solid #0a2035;
+    overflow-y: auto;
+    padding: 14px 12px 20px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    overflow-y: auto; /* Bezpieczeństwo: jeśli ekran będzie mały, panel dostanie suwak */
+    gap: 10px;
 }
 
-.control-panel h2 {
-    margin: 0;
-    font-size: 1.3rem;
-    text-align: center;
+.panel-header {
+    padding-bottom: 2px;
+}
+
+.panel-header h2 {
+    font-size: 15px;
+    color: #c8e0f0;
     letter-spacing: 1px;
-    color: #ffffff;
 }
 
-.control-panel hr {
-    border: 0;
-    height: 1px;
-    background: #2d2d2d;
-    margin: 0;
-}
-
-/* Estetyczne ramki (karty) wokół osadzonych wykresów */
 .grafana-card {
-    background: #181b1f; /* Kolor tła paneli wewnątrz Grafany */
-    border-radius: 8px;
-    padding: 12px;
-    border: 1px solid #24292e;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+    background: #0a1825;
+    border: 1px solid #102030;
+    border-radius: 7px;
+    padding: 8px 10px;
 }
 
 .grafana-card h4 {
-    margin: 0 0 12px 0;
-    font-size: 0.95rem;
-    font-weight: normal;
-    color: #cccccc;
+    font-size: 11px;
+    color: #4a7a9a;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    font-weight: 600;
+    text-transform: uppercase;
 }
 
-/* Wygładzenie krawędzi samych ramek wykresów */
-iframe {
-    border-radius: 6px;
-    background: #111217;
+.grafana-card iframe {
+    border-radius: 4px;
+    display: block;
 }
 
-/* Twardy reset dla panelu deweloperskiego */
-.lil-gui.root {
-    bottom: auto !important;
-    height: max-content !important;
-    max-height: 100vh !important;
-    background-color: transparent !important;
-    box-shadow: none !important;
+/* ===== GRANT INFO CARD ===== */
+
+.grant-info-card {
+    background: linear-gradient(135deg, #050e1a 0%, #0a1c30 100%);
+    border: 1px solid #0a3a5a;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 4px;
 }
 
-/* Upewnienie się, że same suwaki mają poprawne tło, by nie stały się przezroczyste */
-.lil-gui .children {
-    background-color: #1a1a1a !important;
+.grant-info-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #4a9acc;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 9px;
 }
+
+.grant-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 3px 0;
+    border-bottom: 1px solid #0a1e2e;
+    font-size: 10.5px;
+}
+
+.grant-info-row:last-child { border-bottom: none; }
+
+.grant-label {
+    color: #446688;
+    font-weight: 600;
+}
+
+.grant-value {
+    color: #7aaac8;
+    text-align: right;
+}
+
+/* ===== SCROLLBAR ===== */
+
+.control-panel::-webkit-scrollbar { width: 4px; }
+.control-panel::-webkit-scrollbar-track { background: #07101a; }
+.control-panel::-webkit-scrollbar-thumb { background: #0d2a40; border-radius: 2px; }

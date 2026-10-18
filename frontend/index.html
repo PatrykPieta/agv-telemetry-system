@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Digital Twin AGV - Three.js</title>
+    <title>IDUB D12 — Neuro-Curiosity AGV | SKN Sensor · AGH</title>
     <link rel="stylesheet" href="styles.css">
-   <script type="importmap">
+    <script type="importmap">
         {
           "imports": {
             "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
@@ -17,47 +17,200 @@
 </head>
 <body>
 
-    <div class="app-container">
-        
-        <div class="left-pane" style="position: relative;">
-            <div id="scene-container"></div>
-            
-           <div id="ui-overlay" style="position: absolute; top: 15px; left: 15px; z-index: 9999; background: rgba(15, 15, 15, 0.85); padding: 15px; border-radius: 8px; border: 1px solid #444; color: white;">
-                <h2 style="margin-top: 0; font-size: 18px;">Digital Twin AGV</h2>
-                <p>Status: <span id="status" class="status-offline">Łączenie...</span></p>
-                
-                <p>Zegar: <span id="ui-clock" style="font-family: monospace; color: #00ff00;">--:--:--</span></p>
-                
-                <p>Prędkość: <span id="ui-rpm">0</span> RPM</p>
-                <p>Bateria: <span id="ui-volt">0</span> V</p>
+<div class="app-container">
 
-                <button id="camera-toggle" style="margin-top: 10px; width: 100%; padding: 8px 10px; cursor: pointer; background-color: #333; color: #00ff00; border: 1px solid #555; border-radius: 4px; font-weight: bold;">
-                    🔒 Podążaj za wózkiem
-                </button>
+    <!-- ===== LEFT: 3D SCENE ===== -->
+    <div class="left-pane" style="position: relative;">
+        <div id="scene-container"></div>
+
+        <!-- TOP BANNER -->
+        <div class="idub-banner">
+            <span class="banner-logo">AGH · SKN SENSOR</span>
+            <span class="banner-title">NEURO-CURIOSITY AGV PLATFORM</span>
+            <span class="banner-grant">IDUB D12 · POB 6 · Automatyzacja i Robotyka</span>
+        </div>
+
+        <!-- CONNECTION STATUS OVERLAY (top-left corner, minimal) -->
+        <div class="status-badge">
+            Status: <span id="status" class="status-offline">Łączenie...</span>
+            &nbsp;|&nbsp;
+            <span id="ui-clock" style="font-family: monospace; color: #88ccff;">--:--:--</span>
+        </div>
+
+        <!-- LEFT SIDE: RL COGNITIVE HUD -->
+        <div class="rl-hud">
+            <div class="hud-header">
+                <div class="hud-icon">🧠</div>
+                <div>
+                    <div class="hud-title">Neuro-Curiosity Agent</div>
+                    <div class="hud-sub">
+                        Algo: <span id="hud-algorithm" class="hud-val-blue">PPO+ICM</span>
+                        &nbsp;|&nbsp;
+                        Policy: <span id="hud-policy" class="hud-val-blue">NeuroC_v1</span>
+                    </div>
+                </div>
             </div>
 
-            <div id="performance-monitor" style="position: absolute; top: 20px; right: 20px; color: #00ff00; background: rgba(0,0,0,0.8); padding: 10px; font-family: monospace; z-index: 100; pointer-events: none; border-radius: 5px; border: 1px solid #00ff00; font-size: 14px;">
-                Inicjalizacja metryk...
+            <div class="hud-badge-row">
+                <span class="mode-badge sim">🔵 SIM: Isaac Sim (synthetic)</span>
+                <span class="mode-badge real" style="opacity:0.4">🟠 REAL: Jetson Orin NX</span>
+            </div>
+            <div class="hud-sub" style="margin-bottom:8px">
+                Mode: <span id="hud-mode" class="hud-val-yellow">sim_to_real</span>
+                &nbsp;·&nbsp;
+                Platform: <span id="hud-platform" class="hud-val-dim">Jetson Orin NX (synthetic)</span>
+            </div>
+
+            <hr class="hud-divider">
+
+            <!-- Reward metrics -->
+            <div class="hud-section-label">REWARD SIGNALS</div>
+
+            <div class="hud-metric">
+                <span class="hud-label">Intrinsic Reward <em>(r<sub>i</sub>)</em></span>
+                <span id="hud-intrinsic" class="hud-value">0.000</span>
+            </div>
+            <div class="hud-bar-track"><div id="bar-intrinsic" class="hud-bar bar-yellow"></div></div>
+
+            <div class="hud-metric">
+                <span class="hud-label">Extrinsic Reward <em>(r<sub>e</sub>)</em></span>
+                <span id="hud-extrinsic" class="hud-value" style="color:#00c8ff">0.000</span>
+            </div>
+
+            <div class="hud-metric">
+                <span class="hud-label">Total Reward <em>(r<sub>total</sub>)</em></span>
+                <span id="hud-total-r" class="hud-value" style="color:#ffffff">0.000</span>
+            </div>
+
+            <hr class="hud-divider">
+
+            <!-- ICM metrics -->
+            <div class="hud-section-label">ICM — INTRINSIC CURIOSITY MODULE</div>
+
+            <div class="hud-metric">
+                <span class="hud-label">Forward Model Error</span>
+                <span id="hud-icm-error" class="hud-value">0.000</span>
+            </div>
+            <div class="hud-bar-track"><div id="bar-icm-error" class="hud-bar bar-red"></div></div>
+
+            <div class="hud-metric">
+                <span class="hud-label">Policy Entropy <em>(H)</em></span>
+                <span id="hud-entropy" class="hud-value" style="color:#bb88ff">0.000</span>
+            </div>
+            <div class="hud-bar-track"><div id="bar-entropy" class="hud-bar bar-purple"></div></div>
+
+            <hr class="hud-divider">
+
+            <!-- Sim-to-Real -->
+            <div class="hud-section-label">SIM-TO-REAL TRANSFER</div>
+
+            <div class="hud-metric">
+                <span class="hud-label">Reality Gap Index</span>
+                <span id="hud-gap" class="hud-value">0.000</span>
+            </div>
+            <div class="hud-bar-track"><div id="bar-gap" class="hud-bar bar-blue"></div></div>
+
+            <div class="hud-metric">
+                <span class="hud-label">Jerk Metric <em>(m/s³)</em></span>
+                <span id="hud-jerk" class="hud-value">0.000</span>
+            </div>
+
+            <hr class="hud-divider">
+
+            <!-- Training step -->
+            <div class="hud-metric">
+                <span class="hud-label" style="color:#666">Training Step</span>
+                <span id="hud-step" class="hud-value" style="color:#555; font-size:11px">0</span>
             </div>
         </div>
 
-        <div class="control-panel">
-            <h2>KOKPIT OPERATORSKI IIoT</h2>
-            <hr>
-            
-            <div class="grafana-card">
-                <h4>Prędkość Obrotowa Kół (RPM)</h4>
-                <iframe src="http://localhost:3000/d-solo/advbjcq/agv?orgId=1&from=now-5m&to=now&timezone=browser&panelId=panel-8&refresh=1s" width="100%" height="220" frameborder="0"></iframe>
-            </div>
-
-            <div class="grafana-card">
-                <h4>Temperatura Łożysk Silników (°C)</h4>
-                <iframe src="http://localhost:3000/d-solo/advbjcq/agv?orgId=1&from=now-5m&to=now&timezone=browser&panelId=panel-9&refresh=1s" width="100%" height="220" frameborder="0"></iframe>
+        <!-- BOTTOM-LEFT: standard AGV telemetry (compact) -->
+        <div class="agv-mini-hud">
+            <div class="mini-title">AGV TELEMETRIA</div>
+            <div>Koło FL: <span id="ui-rpm" class="mini-val">—</span> RPM</div>
+            <div>Bateria: <span id="ui-volt" class="mini-val">—</span> V</div>
+            <div id="ui-alert" role="status" class="mini-alert">Brak ostrzeżeń</div>
+            <div style="margin-top:6px; display:flex; gap:6px;">
+                <button id="camera-toggle" class="mini-btn">🔓 Odłącz kamerę</button>
+                <button id="scene-options" aria-expanded="false" class="mini-btn">⚙ Scena</button>
             </div>
         </div>
 
+        <!-- TOP-RIGHT: Performance monitor -->
+        <div id="performance-monitor" class="perf-monitor">Inicjalizacja...</div>
     </div>
 
-    <script type="module" src="js/main.js"></script>
+    <!-- ===== RIGHT: OPERATOR PANEL ===== -->
+    <div class="control-panel">
+        <div class="panel-header">
+            <div style="font-size:11px; color:#888; letter-spacing:2px; text-transform:uppercase">SKN Sensor · AGH Kraków</div>
+            <h2 style="margin:4px 0 2px">KOKPIT OPERATORSKI</h2>
+            <div style="font-size:10px; color:#005fa3; letter-spacing:1px">IIoT Edge Computing Platform · IDUB D12</div>
+        </div>
+        <hr style="border-color:#222; margin:8px 0">
+
+        <div class="grafana-card">
+            <h4>📈 Prędkość Obrotowa Kół (RPM)</h4>
+            <iframe data-panel="8" title="Prędkości kół" width="100%" height="200" frameborder="0"></iframe>
+        </div>
+
+        <div class="grafana-card">
+            <h4>🌡 Temperatura Silników (°C)</h4>
+            <iframe data-panel="9" title="Temperatury silników" width="100%" height="200" frameborder="0"></iframe>
+        </div>
+
+        <div class="grafana-card">
+            <h4>⚡ Napięcie i Pobór Prądu</h4>
+            <iframe data-panel="10" title="Napięcie i prąd" width="100%" height="200" frameborder="0"></iframe>
+        </div>
+
+        <!-- Static info panel for grant context -->
+        <div class="grant-info-card">
+            <div class="grant-info-title">🔬 O Projekcie IDUB D12</div>
+            <div class="grant-info-row">
+                <span class="grant-label">Algorytm:</span>
+                <span class="grant-value">PPO z ICM (Intrinsic Curiosity)</span>
+            </div>
+            <div class="grant-info-row">
+                <span class="grant-label">Transfer:</span>
+                <span class="grant-value">Sim-to-Real (Isaac Sim → Jetson)</span>
+            </div>
+            <div class="grant-info-row">
+                <span class="grant-label">Platforma:</span>
+                <span class="grant-value">NVIDIA Jetson Orin NX</span>
+            </div>
+            <div class="grant-info-row">
+                <span class="grant-label">Typ kół:</span>
+                <span class="grant-value">Mecanum (holonomiczny)</span>
+            </div>
+            <div class="grant-info-row">
+                <span class="grant-label">Monitoring:</span>
+                <span class="grant-value">Edge Computing + TimescaleDB</span>
+            </div>
+            <div class="grant-info-row">
+                <span class="grant-label">Cel pracy:</span>
+                <span class="grant-value">Autonomiczna eksploracja magazynu</span>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script type="module" src="js/main.js"></script>
+<script type="module">
+    const config = await fetch('/api/config').then(r => r.json()).catch(() => ({ agv_id: 'AGV-01' }));
+    document.querySelectorAll('iframe[data-panel]').forEach(frame => {
+        const url = new URL('/d-solo/agv-system/agv', location.href);
+        url.port = '3000';
+        url.search = new URLSearchParams({
+            orgId: '1', from: 'now-5m', to: 'now',
+            panelId: frame.dataset.panel,
+            refresh: '5s',
+            'var-agv': config.agv_id,
+            theme: 'dark',
+        });
+        frame.src = url.href;
+    });
+</script>
 </body>
 </html>

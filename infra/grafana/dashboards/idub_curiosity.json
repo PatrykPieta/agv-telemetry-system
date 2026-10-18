@@ -1,0 +1,222 @@
+{
+  "uid": "idub-curiosity",
+  "title": "IDUB D12 — Neuro-Curiosity Metrics",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-5m", "to": "now" },
+  "tags": ["idub", "rl", "curiosity", "agv"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "🏃 RPM Kół Mecanum",
+      "description": "Prędkości czterech kół holonomicznych — sterowane przez politykę PPO+ICM",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "agv-timescale" },
+          "format": "time_series",
+          "rawSql": "SELECT time, fl_rpm AS \"FL\", fr_rpm AS \"FR\", rl_rpm AS \"RL\", rr_rpm AS \"RR\" FROM telemetry WHERE $__timeFilter(time) AND agv_id = ${agv:sqlstring} ORDER BY time"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "🌡 Temperatura Silników (°C)",
+      "description": "Monitorowanie termiczne — przegrzanie jest regułą alertu Spark",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 8 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 45 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "agv-timescale" },
+          "format": "time_series",
+          "rawSql": "SELECT time, fl_temp_c AS \"FL\", fr_temp_c AS \"FR\", rl_temp_c AS \"RL\", rr_temp_c AS \"RR\" FROM telemetry WHERE $__timeFilter(time) AND agv_id = ${agv:sqlstring} ORDER BY time"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "⚡ Napięcie Szyny (V) i Pobór Prądu (A)",
+      "description": "Monitorowanie zasilania Edge — podstawa oceny efektywności energetycznej polityki",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 5 }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "agv-timescale" },
+          "format": "time_series",
+          "rawSql": "SELECT time, bus_voltage_v AS \"Napięcie [V]\", current_a AS \"Prąd [A]\" FROM telemetry WHERE $__timeFilter(time) AND agv_id = ${agv:sqlstring} ORDER BY time"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "📊 Stat — Próbki w Oknie",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "green", "value": 30 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "agv-timescale" },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS \"Próbki\" FROM telemetry WHERE $__timeFilter(time) AND agv_id = ${agv:sqlstring}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "🌡 Max Temp Silnika",
+      "type": "gauge",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "min": 35, "max": 70, "unit": "celsius",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 45 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "agv-timescale" },
+          "format": "table",
+          "rawSql": "SELECT GREATEST(MAX(fl_temp_c), MAX(fr_temp_c), MAX(rl_temp_c), MAX(rr_temp_c)) AS \"Max Temp\" FROM telemetry WHERE $__timeFilter(time) AND agv_id = ${agv:sqlstring}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "🔋 Napięcie Bieżące",
+      "type": "gauge",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "min": 44, "max": 52, "unit": "volt",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 46 },
+              { "color": "green", "value": 47.5 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "agv-timescale" },
+          "format": "table",
+          "rawSql": "SELECT AVG(bus_voltage_v) AS \"Napięcie\" FROM telemetry WHERE $__timeFilter(time) AND agv_id = ${agv:sqlstring}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "⚡ Pobór Prądu Śr.",
+      "type": "gauge",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 10, "unit": "amp",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 4 },
+              { "color": "red", "value": 7 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "agv-timescale" },
+          "format": "table",
+          "rawSql": "SELECT AVG(current_a) AS \"Prąd\" FROM telemetry WHERE $__timeFilter(time) AND agv_id = ${agv:sqlstring}"
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "agv",
+        "label": "AGV",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "agv-timescale" },
+        "query": "SELECT DISTINCT agv_id FROM telemetry ORDER BY agv_id",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "current": { "text": "AGV-01", "value": "AGV-01" }
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "Alerty Temperatury",
+        "datasource": { "type": "postgres", "uid": "agv-timescale" },
+        "enable": true,
+        "hide": false,
+        "iconColor": "red",
+        "rawQuery": true,
+        "rawSql": "SELECT time AS \"time\", 'Alarm temp' AS text, 'overtemp' AS tags FROM telemetry WHERE $__timeFilter(time) AND agv_id = ${agv:sqlstring} AND GREATEST(fl_temp_c, fr_temp_c, rl_temp_c, rr_temp_c) > 48 ORDER BY time",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

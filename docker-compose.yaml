@@ -134,6 +134,25 @@ services:
     depends_on:
       - timescaledb
     restart: on-failure
+  # --- MODUŁ IDUB: Neuro-Curiosity synthetic emulator (grant presentation) ---
+  idub-emulator:
+    profiles: ["idub"]
+    build: ./edge-emulator
+    command: ["python", "-u", "idub_emulator.py"]
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_SERVER=kafka:9092
+      - AGV_ID=${AGV_ID:-AGV-01}
+      - POSTGRES_DB=${POSTGRES_DB:-agv_db}
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - EMULATOR_HZ=${EMULATOR_HZ:-10}
+      - EMULATOR_SEED=${EMULATOR_SEED:-99}
+      - EMULATOR_DURATION_S=${EMULATOR_DURATION_S:-0}
+      - PYTHONUNBUFFERED=1
+    restart: on-failure
+
 # <-- DODANE NA SAMYM DOLE: Deklaracja sejfów na dysku
 volumes:
   postgres_data:
