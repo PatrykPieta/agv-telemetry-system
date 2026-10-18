@@ -1,0 +1,152 @@
+\documentclass[11pt,a4paper]{report}
+\usepackage[T1]{fontenc}
+\usepackage{polski}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=3.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+
+\setcounter{tocdepth}{1}
+\setcounter{secnumdepth}{1}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\IfFileExists{logo_AGH.pdf}{%
+  \includegraphics[width=\textwidth,height=3cm,keepaspectratio]{logo_AGH.pdf}
+}{%
+  {\Large\sffamily Akademia Górniczo-Hutnicza w Krakowie}
+}
+\par\vspace{5mm}
+{\bfseries\sffamily WYDZIAŁ ODLEWNICTWA\par}
+\vspace{5mm}
+{\bfseries\sffamily KATEDRA ---\par} % Uzupełnij nazwę katedry.
+\vspace{14mm}
+{\sffamily\huge Projekt dyplomowy\par}
+\vspace{12mm}
+{\sffamily\Large
+Projekt i implementacja systemu cyfrowego bliźniaka wózka AGV
+z wykorzystaniem architektury Edge Computing\par}
+\vspace{5mm}
+{\sffamily\large
+Design and implementation of a digital twin system for an AGV trolley
+using the Edge Computing architecture\par}
+\vfill
+\begin{flushleft}
+\sffamily
+\begin{tabular}{@{}ll@{}}
+Autor: & Patryk Pięta\\
+Kierunek studiów: & Technologie przemysłu 4.0\\
+Opiekun pracy: & dr inż. Waldemar Bauer\\
+\end{tabular}
+\end{flushleft}
+\vspace{10mm}
+{\sffamily Kraków, 2026\par}
+\end{titlepage}
+
+% Robocowy szkielet pracy i propozycja spisu treści.
+% Przed oddaniem dodaj wymagane przez wydział oświadczenia,
+% streszczenie po polsku i po angielsku oraz opis wykorzystania AI,
+% zgodnie z aktualnym wzorem otrzymanym od uczelni.
+% Nie zakładaj, że sam obraz AI_poziom_3.jpg stanowi oświadczenie.
+
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+
+\chapter{Wstęp}
+\section{Uzasadnienie wyboru tematu}
+% Potrzeba obserwacji stanu AGV i powiązanie z Przemysłem 4.0.
+\section{Cel i zakres pracy}
+% Cel: zaprojektowanie, implementacja i weryfikacja prototypu
+% odwzorowującego stan AGV na podstawie strumienia telemetrii.
+% Określ granice prototypu i mierzalne kryteria realizacji celu.
+\section{Wkład własny autora}
+% Wskaż samodzielnie wykonane elementy projektu oraz źródła
+% wykorzystanych modeli, bibliotek i innych materiałów.
+\section{Struktura pracy}
+
+\chapter{Podstawy teoretyczne i przegląd literatury}
+\section{Wózki AGV i monitorowanie ich stanu}
+\section{Cyfrowy model, cyfrowy cień i cyfrowy bliźniak}
+% Wyjaśnij kierunek przepływu danych i określ, w jakim zakresie
+% prototyp realizuje koncepcję cyfrowego bliźniaka.
+\section{Architektura Edge Computing w systemach przemysłowych}
+\section{Przetwarzanie strumieniowe i przechowywanie szeregów czasowych}
+\section{Przegląd podobnych rozwiązań i uzasadnienie przyjętego podejścia}
+% Porównuj rozwiązania według kryteriów związanych z celem pracy.
+
+\chapter{Założenia i wymagania projektowe}
+\section{Przeznaczenie systemu i scenariusze użytkowania}
+\section{Wymagania funkcjonalne}
+% Telemetria, zapis historii, wizualizacja, LiDAR i ostrzeżenia.
+\section{Wymagania niefunkcjonalne i kryteria akceptacji}
+% Określ sprawdzalne wymagania dotyczące aktualności danych,
+% niezawodności, wydajności i możliwości uruchomienia systemu.
+\section{Zakres danych oraz założenia dotyczące modelu AGV}
+\section{Ograniczenia sprzętowe i programowe}
+% Rozróżnij dane syntetyczne i dane z rzeczywistych czujników.
+% Obecna wersja nie steruje fizycznym wózkiem.
+
+\chapter{Projekt architektury systemu}
+\section{Podział na warstwę Edge i usługi centralne}
+% Schemat komponentów i rzeczywiste miejsce wykonywania obliczeń.
+\section{Dobór technologii i porównanie alternatyw}
+% Uzasadnij użycie Kafka, TimescaleDB, Spark, Grafana i Three.js.
+\section{Przepływ danych i interfejsy komunikacyjne}
+\section{Schemat telemetrii i model przechowywania danych}
+\section{Model ruchu i aktualizacja wizualizacji AGV}
+% Opisz estymację ruchu w przeglądarce i jej ograniczenia.
+\section{Obsługa błędów, trwałość danych i założenia bezpieczeństwa}
+
+\chapter{Implementacja systemu}
+\section{Emulator telemetrii i scenariusze pracy wózka}
+\section{Przetwarzanie danych LiDAR w warstwie Edge}
+% Filtracja i grupowanie DBSCAN; obecnie źródłem jest MockRPLidar.
+\section{Przesyłanie i walidacja danych w Apache Kafka}
+\section{Zapis i agregacja danych w TimescaleDB}
+\section{Przetwarzanie strumieniowe i ostrzeżenia w Apache Spark}
+% Próg temperatury jest regułą ostrzegania, a nie predykcją awarii.
+\section{Wizualizacja 3D i komunikacja przez WebSocket}
+\section{Prezentacja danych historycznych w Grafanie}
+\section{Konteneryzacja, konfiguracja i panel uruchomieniowy}
+% Opisz istotne decyzje i trudności, zamiast omawiać każdy plik.
+
+\chapter{Testy i ocena rozwiązania}
+\section{Środowisko testowe i metodyka badań}
+% Podaj konfigurację, wersje, czas prób i sposób pomiaru.
+\section{Testy poprawności telemetrii, LiDAR i modelu ruchu}
+\section{Testy integracyjne przepływu i zapisu danych}
+\section{Testy ostrzeżeń i aktualizacji wizualizacji}
+\section{Testy obsługi błędów i przerw w dostarczaniu danych}
+\section{Pomiary opóźnień i wydajności systemu}
+% PLANOWANE: wykonaj pomiary przed opisaniem wyników.
+% Odróżnij zaległość konsumenta Kafka od opóźnienia w milisekundach.
+% Rozważ częstotliwość odbioru, kompletność danych, CPU i RAM.
+\section{Ocena realizacji wymagań i omówienie ograniczeń}
+% Powiąż wymagania z wynikami konkretnych testów.
+% Nie przedstawiaj testów Raspberry Pi, rzeczywistych czujników
+% ani badań długotrwałych jako wykonanych bez ich przeprowadzenia.
+
+\chapter{Podsumowanie i wnioski}
+\section{Ocena realizacji celu pracy}
+\section{Najważniejsze osiągnięcia i wnioski}
+\section{Możliwości zastosowania i kierunki dalszego rozwoju}
+% Rzeczywiste czujniki, weryfikacja na Raspberry Pi,
+% wspólny stan pojazdu, buforowanie Edge i rozbudowa diagnostyki.
+
+\chapter*{Bibliografia}
+\phantomsection
+\addcontentsline{toc}{chapter}{Bibliografia}
+% Wstaw rzeczywiście wykorzystane publikacje i dokumentację.
+% Przy pisaniu pracy zastąp ten nagłówek bibliografią generowaną
+% przez BibTeX lub biblatex; nie dodawaj wówczas drugiego nagłówka.
+
+\appendix
+\chapter{Instrukcja uruchomienia i obsługi systemu}
+\chapter{Specyfikacja komunikatów i konfiguracja usług}
+\chapter{Szczegółowe wyniki testów}
+
+\end{document}

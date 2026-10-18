@@ -30,5 +30,11 @@ export function setupGUI(ambientLight, directionalLight, floorMaterial, material
     agvFolder.addColor(colorPickers, 'chassisColor').name('Kolor Podwozia').onChange(value => materialPodwozie.color.set(value));
     lightFolder.addColor(colorPickers, 'lightColor').name('Barwa Światła').onChange(value => directionalLight.color.set(value));
 
-    gui.open();
+    gui.domElement.style.display = 'none';
+    const toggle = document.getElementById('scene-options');
+    toggle.addEventListener('click', () => {
+        const show = gui.domElement.style.display === 'none';
+        gui.domElement.style.display = show ? '' : 'none';
+        toggle.setAttribute('aria-expanded', String(show));
+    });
 }

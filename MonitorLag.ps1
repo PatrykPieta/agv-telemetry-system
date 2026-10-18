@@ -1,32 +1,25 @@
-$filename = "wyniki_lag_kafka500hz.csv"
-
-Write-Host "Uruchamiam system monitorowania opoznien (Lag)..." -ForegroundColor Cyan
-Write-Host "Nacisnij Ctrl+C, aby zakonczyc pomiar." -ForegroundColor Yellow
-
-# Zapisanie naglowkow do pliku CSV
-"Czas,Lag" | Out-File -FilePath $filename -Encoding utf8
-
-while ($true) {
-    # Odpytanie Kafki przez wbudowane narzedzia CLI kontenera
-    $output = docker-compose exec -T kafka kafka-consumer-groups --bootstrap-server localhost:9092 --describe --group agv_db_writers 2>$null
-    
-    $current_lag = 0
-    foreach ($line in $output) {
-        if ($line -match "telemetry_topic") {
-            # Rozbicie linii po spacjach i wyciagniecie 6. kolumny (indeks 5)
-            $parts = $line -split '\s+' | Where-Object { $_ -ne '' }
-            if ($parts.Count -ge 6) {
-                $current_lag = $parts[5]
+param([string]$OutputFile = 'wyniki_lag.csv', [string]$Group = 'agv_db_writers')
+Push-Location $PSScriptRoot
+try {
+    'TimestampUtc,LagMessages,Status' | Set-Content -LiteralPath $OutputFile -Encoding UTF8
+    while ($true) {
+        $rows = & docker compose exec -T kafka kafka-consumer-groups --bootstrap-server kafka:9092 --describe --group $Group 2>&1
+        $exitCode = $LASTEXITCODE
+        $lag = 0L
+        $found = $false
+        foreach ($row in $rows) {
+            $parts = "$row".Trim() -split '\s+'
+            if ($parts.Count -ge 6 -and $parts[0] -eq $Group -and $parts[1] -eq 'telemetry_topic') {
+                $value = 0L
+                if ([long]::TryParse($parts[5], [ref]$value)) {
+                    $lag += $value
+                    $found = $true
+                }
             }
         }
+        $timestamp = [DateTime]::UtcNow.ToString('o')
+        if ($exitCode -eq 0 -and $found) { "$timestamp,$lag,ok" | Add-Content -LiteralPath $OutputFile }
+        else { "$timestamp,,unavailable" | Add-Content -LiteralPath $OutputFile }
+        Start-Sleep -Seconds 2
     }
-
-    # Zapis do pliku
-    $now = Get-Date -Format "HH:mm:ss"
-    "$now,$current_lag" | Out-File -FilePath $filename -Encoding utf8 -Append
-    
-    # Wyswietlenie na ekranie (nadpisywanie tej samej linii)
-    Write-Host "`r[$now] Aktualny Lag: $current_lag wiadomosci   " -NoNewline
-    
-    Start-Sleep -Milliseconds 500
-}
+} finally { Pop-Location }

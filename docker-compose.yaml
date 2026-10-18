@@ -1,140 +1,204 @@
+x-edge-env: &edge-env
+  KAFKA_SERVER: kafka:9092
+  AGV_ID: ${AGV_ID:-AGV-01}
+  POSTGRES_DB: ${POSTGRES_DB:-agv_db}
+  POSTGRES_USER: ${POSTGRES_USER:-admin}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+
 services:
-  # --- ZOOKEEPER (Zarządca Kafki) ---
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-    restart: on-failure
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+    restart: unless-stopped
 
-  # --- KAFKA (Centralna Szyna Danych) ---
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     depends_on:
       - zookeeper
     ports:
-      - "9092:9092"
       - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      # TUTAJ WPISUJESZ SWOJE IP TYLKO DLA ZEWNĘTRZNYCH URZĄDZEŃ
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://10.10.133.187:29092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://${KAFKA_EXTERNAL_HOST:-localhost}:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+      start_period: 20s
+    restart: unless-stopped
 
-  # --- BAZA DANYCH (TimescaleDB) ---
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-ec"]
+    command:
+      - |
+        for topic in telemetry_topic lidar_topic alerts_topic; do
+          kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic "$$topic" --partitions 1 --replication-factor 1
+        done
+
   timescaledb:
-    image: timescale/timescaledb:latest-pg15
+    image: timescale/timescaledb@sha256:867dc9cbb3232dece516122d49e56ce472754fe31cbffb54d64920f8d2ed79b6
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
-      - POSTGRES_USER=admin          # <-- DODAJ TO
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=agv_db
-    volumes:                                      # <-- DODANE: Pamięć bazy danych
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-agv_db}
+    volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
 
-  # --- WIZUALIZACJA ANALITYCZNA (Grafana) ---
+  db-init:
+    build: ./edge-emulator
+    command: ["python", "-u", "create_aggregations.py"]
+    environment: *edge-env
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana@sha256:0f86bada30d65ef9d0183b90c1e2682ac92d53d95da8bed322b984ea78a4a73a
     ports:
       - "3000:3000"
     depends_on:
-      - timescaledb
-    volumes:                                      # <-- DODANE: Pamięć dashboardów
+      db-init:
+        condition: service_completed_successfully
+    volumes:
       - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
     environment:
-      - GF_SECURITY_ALLOW_EMBEDDING=true
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      <<: *edge-env
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    restart: unless-stopped
 
-  # --- MODUŁ A (Emulator AGV) ---
   edge-emulator:
+    profiles: ["simulation"]
     build: ./edge-emulator
     depends_on:
-      - kafka
+      kafka-init:
+        condition: service_completed_successfully
     environment:
-      - KAFKA_SERVER=kafka:9092
+      <<: *edge-env
+      EMULATOR_HZ: ${EMULATOR_HZ:-10}
+      EMULATOR_SCENARIO: ${EMULATOR_SCENARIO:-normal}
+      EMULATOR_SEED: ${EMULATOR_SEED:-42}
+      EMULATOR_DURATION_S: ${EMULATOR_DURATION_S:-0}
+    restart: on-failure
+
+  edge-processor:
+    profiles: ["lidar"]
+    build: ./edge-emulator
+    command: ["python", "-u", "edge_processor.py"]
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    environment: *edge-env
     restart: on-failure
 
   data-consumer:
     build: ./edge-emulator
-    command: ["python", "-u", "consumer.py"] 
+    command: ["python", "-u", "consumer.py"]
     depends_on:
-      - kafka
-      - timescaledb
-    environment:
-      - PYTHONUNBUFFERED=1
-    restart: on-failure
-
-  edge-processor:
-    build: ./edge-emulator
-    command: ["python", "-u", "edge_processor.py"] 
-    depends_on:
-      - kafka
-    environment:
-      - PYTHONUNBUFFERED=1
-    restart: on-failure
-
-  pgadmin:
-    image: dpage/pgadmin4
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "5050:80"
-    depends_on:
-      - timescaledb
+      kafka-init:
+        condition: service_completed_successfully
+      db-init:
+        condition: service_completed_successfully
+    environment: *edge-env
+    healthcheck:
+      test: ["CMD", "python", "health.py", "/tmp/consumer-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     restart: on-failure
 
   frontend:
     build: ./frontend
     ports:
       - "8000:8000"
-    volumes:                  
-      - ./frontend:/app
     depends_on:
-      - kafka
-    restart: on-failure
-  # --- MODUŁ B: ANALITYKA BIG DATA (Apache Spark) ---
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_SERVER: kafka:9092
+      AGV_ID: ${AGV_ID:-AGV-01}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
   spark-analytics:
     build: ./spark-analytics
     depends_on:
-      - kafka 
-    ports:                  # <--- DODAJ TO
-      - "4040:4040"         # <--- DODAJ TO
-    environment:                 # <-- DODAJ TO
-      - PYTHONUNBUFFERED=1
-    volumes:                      # <-- DODAJ TO
-      - ./spark-analytics:/app
+      kafka-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:4040:4040"
+    environment:
+      KAFKA_SERVER: kafka:9092
+      SPARK_CHECKPOINT: /checkpoints/drive-temperature-v1
+    volumes:
+      - spark_checkpoint:/checkpoints
+      - spark_ivy:/root/.ivy2
     restart: on-failure
-    
 
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    profiles: ["tools"]
+    image: provectuslabs/kafka-ui@sha256:8f2ff02d64b0a7a2b71b6b3b3148b85f66d00ec20ad40c30bdcd415d46d31818
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
-      - KAFKA_CLUSTERS_0_NAME=AGV_Cluster
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+      KAFKA_CLUSTERS_0_NAME: AGV
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     depends_on:
-      - kafka
-    restart: on-failure
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
 
   adminer:
-    image: adminer
+    profiles: ["tools"]
+    image: adminer@sha256:cc64d253db4f016cbcff2ff2f01e60ed07e74f38b4398f84d3c4fae4b5ce0e07
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"
     depends_on:
-      - timescaledb
-    restart: on-failure
-# <-- DODANE NA SAMYM DOLE: Deklaracja sejfów na dysku
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   grafana_data:
+  kafka_data:
+  zookeeper_data:
+  zookeeper_log:
+  spark_checkpoint:
+  spark_ivy:

@@ -1,52 +1,35 @@
-﻿# Skrypt automatycznego startu systemu Digital Twin AGV
-
-# 1. Czyszczenie konsoli i ładny komunikat
-# 1. Czyszczenie konsoli, zmiana kodowania na UTF-8 i ładny komunikat
-[console]::InputEncoding = [console]::OutputEncoding = New-Object System.Text.UTF8Encoding
-Clear-Host
-Clear-Host
-Write-Host "==================================================" -ForegroundColor Cyan
-Write-Host "🚀 Uruchamianie Systemu IIoT Cyfrowego Bliźniaka..." -ForegroundColor Green
-Write-Host "==================================================" -ForegroundColor Cyan
-
-# 2. FAZA 1: Odpalenie infrastruktury (Baza, Kafka, Grafana)
-Write-Host "⏳ Uruchamianie infrastruktury (Kafka, Baza Danych, Grafana, Adminer)..." -ForegroundColor Cyan
-# Upewnij się, że nazwy usług zgadzają się z Twoim plikiem docker-compose.yml!
-docker-compose up -d kafka timescaledb grafana adminer
-
-# 3. Odczekanie na stabilizację (Rozwiązanie problemu "zimnego startu")
-Write-Host ""
-Write-Host "⏱️ Oczekiwanie 15 sekund na gotowość sieciową i bazodanową..." -ForegroundColor Yellow
-Start-Sleep -Seconds 15
-
-# 4. FAZA 2: Odpalenie reszty systemu (Spark, Emulator, Backend)
-Write-Host "🚀 Infrastruktura gotowa! Uruchamianie analityki (Spark) i emulatora AGV..." -ForegroundColor Green
-docker-compose up -d
-
-# === TWÓJ ŚWIETNY POMYSŁ: Pauza przed przeglądarką ===
-Write-Host ""
-Write-Host "⏱️ Stabilizacja sieci... Dajemy systemowi 10 sekund przed otwarciem paneli..." -ForegroundColor Yellow
-Start-Sleep -Seconds 10
-
-# 5. Otwieranie paneli operatorskich
-Write-Host ""
-Write-Host "🌐 Otwieranie paneli operatorskich..." -ForegroundColor Cyan
-
-# 1. Warstwa Prezentacji (Cyfrowy Bliźniak)
-Start-Process "http://localhost:8000"
-
-# 2. Narzędzie Analityczne (Grafana)
-Start-Process "http://localhost:3000"
-
-# 3. Szyna Danych (Kafka UI) - Zobaczysz przepływ na żywo!
-Start-Process "http://localhost:8080"
-
-# 4. Baza Danych (Adminer) - Zalogujesz się do Postgresa!
-Start-Process "http://localhost:8081"
-
-# 5. Mózg Big Data (Spark UI) - Uruchomi się dopiero, gdy Spark zacznie działać
-Start-Process "http://localhost:4040"
-
-Write-Host ""
-Write-Host "✅ Sukces! Wszystkie systemy operacyjne są ONLINE i idealnie zsynchronizowane." -ForegroundColor Green
-Write-Host "Logi systemu możesz śledzić komendą: docker-compose logs -f" -ForegroundColor Gray
+param(
+    [ValidateSet('Local', 'Remote')][string]$Mode = 'Local',
+    [switch]$Lidar,
+    [switch]$Tools,
+    [switch]$NoBrowser
+)
+$ErrorActionPreference = 'Stop'
+function Invoke-Docker([string[]]$DockerArgs) {
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & docker @DockerArgs 2>&1 | ForEach-Object { "$_" }
+    $result = $LASTEXITCODE
+    $ErrorActionPreference = $previousPreference
+    if ($result -ne 0) { throw "Docker zakonczyl operacje bledem ($result). Sprawdz logi i Docker Desktop." }
+}
+Push-Location $PSScriptRoot
+try {
+    Invoke-Docker @('info', '--format', '{{.ServerVersion}}')
+    $composeArgs = @('compose')
+    if ($Mode -eq 'Local') { $composeArgs += @('--profile', 'simulation') }
+    if ($Lidar) { $composeArgs += @('--profile', 'lidar') }
+    if ($Tools) { $composeArgs += @('--profile', 'tools') }
+    # Stop sources from a previous mode to prevent two AGVs sharing the same ID.
+    $sourcesToStop = @()
+    if ($Mode -eq 'Remote') { $sourcesToStop += 'edge-emulator' }
+    if (-not $Lidar) { $sourcesToStop += 'edge-processor' }
+    if ($sourcesToStop.Count) {
+        Invoke-Docker (@('compose', '--profile', 'simulation', '--profile', 'lidar', 'stop') + $sourcesToStop)
+    }
+    Invoke-Docker ($composeArgs + @('up', '-d', '--build', '--wait', '--wait-timeout', '240'))
+    Write-Output 'Uslugi uruchomione. Gotowosc telemetrii sprawdz w wizualizacji; Spark moze jeszcze pobierac konektor.'
+    if (-not $NoBrowser) { Start-Process 'http://localhost:8000' }
+} finally {
+    Pop-Location
+}

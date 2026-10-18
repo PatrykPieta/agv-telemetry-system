@@ -1,79 +1,104 @@
-export function setupWebSocket(agvModel, obstacleMeshes, rpmsState) {
-    const ws = new WebSocket(`ws://${window.location.host}/ws`);
+import * as THREE from 'three';
 
-    ws.onopen = () => {
-        const statusEl = document.getElementById('status');
-        if (statusEl) {
-            statusEl.innerText = "ONLINE";
-            statusEl.className = "";
-            statusEl.style.color = "#00ff00";
-        }
+export function setupWebSocket(agvModel, obstacleMeshes, state) {
+    let socket, retryTimer, closed = false, backoff = 500, lastLidar = 0;
+    let config = { agv_id: 'AGV-01', stale_ms: 2000 };
+    let lastTimestamp = 0, session = null, sequence = -1;
+    let alertUntil = 0;
+    const status = (text, color) => {
+        const el = document.getElementById('status');
+        if (el) { el.textContent = text; el.style.color = color; }
     };
-
-    ws.onmessage = (event) => {
-        let data;
-        try {
-            data = JSON.parse(event.data);
-        } catch (error) {
-            return; // Śmieciowa paczka, ignorujemy po cichu
+    const reset = () => {
+        Object.assign(state, { FL: 0, FR: 0, RL: 0, RR: 0, lastReceived: 0 });
+        for (const id of ['ui-rpm', 'ui-volt']) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '—';
         }
-
-        // ALARMY BIG DATA
-        if (data.ALERT_MSG) {
-            console.warn("🔥 ALARM Z SYSTEMU BIG DATA:", data.ALERT_MSG);
-            const statusEl = document.getElementById('status');
-            if (statusEl) {
-                statusEl.innerText = "🔥 ZATARCIE KOŁA!";
-                statusEl.style.color = "#ff0000";
+        obstacleMeshes.forEach(mesh => mesh.visible = false);
+    };
+    const fresh = data => Number.isFinite(data.timestamp) &&
+        Math.abs(Date.now() - data.timestamp * 1000) <= config.stale_ms;
+    function connect() {
+        if (closed) return;
+        socket = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`);
+        socket.onopen = () => {
+            backoff = 500;
+            status('Połączono — oczekiwanie na dane', '#ffcc66');
+        };
+        socket.onmessage = event => {
+            let data;
+            try { data = JSON.parse(event.data); data = data.payload ?? data; }
+            catch { return; }
+            if (!data || data.agv_id !== config.agv_id || !fresh(data)) return;
+            if (data.ALERT_MSG) {
+                alertUntil = performance.now() + 3000;
+                const el = document.getElementById('ui-alert');
+                if (el) el.textContent = data.ALERT_MSG;
+                return;
             }
-            if (agvModel) {
-                agvModel.traverse(node => {
-                    if (node.isMesh && (!node.name.toLowerCase().includes('koło') && !node.name.toLowerCase().includes('wheel'))) {
-                        node.material.color.setHex(0xff0000);
-                    }
+            if (data.telemetry?.motors) {
+                const m = data.telemetry.motors;
+                const speeds = [m.front_left?.speed_rpm, m.front_right?.speed_rpm,
+                    m.rear_left?.speed_rpm, m.rear_right?.speed_rpm];
+                const volts = data.telemetry.power_supply?.bus_voltage_V;
+                if (!speeds.every(Number.isFinite) || !Number.isFinite(volts)) return;
+                if (data.timestamp < lastTimestamp) return;
+                if (data.session_id && data.session_id === session && data.sequence <= sequence) return;
+                session = data.session_id;
+                sequence = data.sequence;
+                lastTimestamp = data.timestamp;
+                [state.FL, state.FR, state.RL, state.RR] = speeds;
+                state.lastReceived = performance.now();
+                document.getElementById('ui-rpm').textContent = speeds[0].toFixed(1);
+                document.getElementById('ui-volt').textContent = volts.toFixed(2);
+                status('ONLINE — aktualna telemetria', '#66ff99');
+            }
+            if (Array.isArray(data.obstacles)) {
+                obstacleMeshes.forEach(mesh => mesh.visible = false);
+                agvModel.updateMatrixWorld(true);
+                const origin = new THREE.Vector3();
+                const rotation = new THREE.Quaternion();
+                agvModel.getWorldPosition(origin);
+                agvModel.getWorldQuaternion(rotation);
+                data.obstacles.slice(0, obstacleMeshes.length).forEach((obs, i) => {
+                    if (![obs.center_x_m, obs.center_y_m, obs.size_m].every(Number.isFinite) || obs.size_m <= 0) return;
+                    const cube = obstacleMeshes[i];
+                    // Sensor: X forward, Y left. Scene: X forward, Z right.
+                    // Ignore visual model scale: sensor measurements are already in metres.
+                    cube.position.set(obs.center_x_m, 0.5, -obs.center_y_m).applyQuaternion(rotation).add(origin);
+                    cube.quaternion.copy(rotation);
+                    cube.scale.set(obs.size_m, 1, obs.size_m);
+                    cube.visible = true;
                 });
+                lastLidar = performance.now();
             }
-            return;
-        }
-
-        // TELEMETRIA
-        if (data.telemetry && data.telemetry.motors) {
-            const rpmEl = document.getElementById('ui-rpm');
-            const voltEl = document.getElementById('ui-volt');
-            if (rpmEl) rpmEl.innerText = data.telemetry.motors.front_left.speed_rpm;
-            if (voltEl) voltEl.innerText = data.telemetry.power_supply.bus_voltage_V;
-
-            // Zapisujemy prędkości do globalnego obiektu stanu
-            rpmsState.FL = data.telemetry.motors.front_left.speed_rpm;
-            rpmsState.FR = data.telemetry.motors.front_right.speed_rpm;
-            rpmsState.RL = data.telemetry.motors.rear_left.speed_rpm;
-            rpmsState.RR = data.telemetry.motors.rear_right.speed_rpm;
-        }
-
-        // PRZESZKODY (LiDAR / DBSCAN)
-        if (data.obstacles) {
-            obstacleMeshes.forEach(mesh => mesh.visible = false);
-            for (let i = 0; i < data.obstacles.length; i++) {
-                if (i >= obstacleMeshes.length) break;
-
-                const obs = data.obstacles[i];
-                const cube = obstacleMeshes[i];
-
-                cube.scale.set(obs.size_m, 1, obs.size_m);
-                cube.position.set(obs.center_x_m, 0.5, -obs.center_y_m);
-
-                if (obs.avg_reflectivity > 200) {
-                    cube.material.color.setHex(0xffaa00);
-                    cube.material.opacity = 0.9;
-                } else if (obs.avg_reflectivity > 100) {
-                    cube.material.color.setHex(0xaaaaaa);
-                    cube.material.opacity = 0.7;
-                } else {
-                    cube.material.color.setHex(0x444444);
-                    cube.material.opacity = 0.5;
-                }
-                cube.visible = true;
+        };
+        socket.onerror = () => socket.close();
+        socket.onclose = () => {
+            reset();
+            status('Rozłączono — ponawianie połączenia', '#ff6666');
+            if (!closed) {
+                retryTimer = setTimeout(connect, backoff);
+                backoff = Math.min(backoff * 2, 10000);
             }
+        };
+    }
+    const timer = setInterval(() => {
+        if (state.lastReceived && performance.now() - state.lastReceived > config.stale_ms) {
+            reset();
+            status('Brak aktualnej telemetrii', '#ffcc66');
         }
-    };
+        if (performance.now() - lastLidar > config.stale_ms) obstacleMeshes.forEach(mesh => mesh.visible = false);
+        if (performance.now() > alertUntil) {
+            const el = document.getElementById('ui-alert');
+            if (el) el.textContent = 'Brak bieżących ostrzeżeń';
+        }
+    }, 250);
+    fetch('/api/config').then(r => { if (!r.ok) throw Error('config'); return r.json(); })
+        .then(value => { config = value; connect(); })
+        .catch(() => { status('Nie udało się pobrać konfiguracji. Odśwież stronę.', '#ff6666'); });
+    window.addEventListener('beforeunload', () => {
+        closed = true; clearInterval(timer); clearTimeout(retryTimer); socket?.close();
+    }, { once: true });
 }

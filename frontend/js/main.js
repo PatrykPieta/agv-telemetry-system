@@ -1,16 +1,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { AGVLoader } from './loader.js';
+import { AGVLoader } from './loader.js?v=2';
 
-// --- IMPORTY TWOICH NOWYCH MODUŁÓW ---
-import { setupEnvironment } from './environment.js';
-import { setupGUI } from './gui.js';
-import { updatePhysics } from './physics.js';
-import { setupWebSocket } from './network.js';
+import { setupEnvironment } from './environment.js?v=2';
+import { setupGUI } from './gui.js?v=2';
+import { updatePhysics } from './physics.js?v=2';
+import { setupWebSocket } from './network.js?v=2';
 
 const container = document.getElementById('scene-container');
 let scene, camera, renderer, controls;
-let previousAGVPosition = null; // <-- DODAJ TĘ ZMIENNĄ
+let previousFrameTime = null;
 let followCamera = true;
 let agvModel;
 let wheelMeshes = [];
@@ -28,9 +27,6 @@ let currentFPS = 0;
 
 function init() {
 
-    // --- NASZ DOWÓD NA TO, ŻE KOD SIĘ ODŚWIEŻYŁ ---
-    console.log("🚀 START SYSTEMU - WERSJA 100");
-    // ----------------------------------------------
     
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
@@ -39,7 +35,7 @@ function init() {
 
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -51,20 +47,12 @@ function init() {
     controls.enableDamping = true; 
     controls.dampingFactor = 0.05; // Uściślamy bezwładność, żeby nie szarpało
 
-    // --- NAPRAWA AGRESYWNEGO SCROLLA ---
-    controls.zoomSpeed = 0.50; // Zmniejszamy czułość scrolla o 95%! 
+    controls.zoomSpeed = 0.50;
 
     // Ograniczniki (zostawiamy je, to dobra inżynierska praktyka)
     controls.maxDistance = 60; 
     controls.minDistance = 3;  
     controls.maxPolarAngle = Math.PI / 2 - 0.02;
-    // --- PUŁAPKA DIAGNOSTYCZNA ---
-    let logCounter = 0;
-    controls.addEventListener('change', () => {
-        logCounter++;
-        
-    });
-    // -----------------------------
 
 
     setupCameraToggle();
@@ -99,7 +87,10 @@ function init() {
             
             animate();
         })
-        .catch(error => console.error("Błąd ładowania modelu", error));
+        .catch(error => {
+            console.error("Błąd ładowania modelu", error);
+            document.getElementById('status').textContent = 'Błąd ładowania modelu 3D';
+        });
 }
 
 // --- FUNKCJE POMOCNICZE ---
@@ -174,14 +165,16 @@ window.addEventListener('resize', onWindowResize);
 
 // --- PĘTLA GŁÓWNA (main.js) ---
 
-function animate() {
+function animate(frameTime = performance.now()) {
     requestAnimationFrame(animate);
+    const dt = previousFrameTime === null ? 0 : (frameTime - previousFrameTime) / 1000;
+    previousFrameTime = frameTime;
 
     updateClock();
 
     if (agvModel) {
         // 1. FIZYKA: Na samym początku wprawiamy wózek w ruch (jeśli dotarły dane RPM)
-        updatePhysics(agvModel, wheelMeshes, rpmsState);
+        updatePhysics(agvModel, wheelMeshes, rpmsState, dt);
 
         // 2. OBLICZANIE PODĄŻANIA: Wózek się ruszył, więc aktualizujemy pozycję kamery
         if (followCamera) {

@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *venv/
 .env
+.vs/
+.venv/
+test-results/
+wyniki_*.csv
 
 # Docker / Bazy danych
 docker-data/

@@ -1,83 +1,74 @@
+"""Reproducible telemetry emulator for a laptop or Raspberry Pi."""
+import logging
+import math
 import os
-import time
-import json
 import random
-from kafka import KafkaProducer
+import signal
+import threading
+import time
+import uuid
+from config import AGV_ID, TELEMETRY_TOPIC
+from telemetry import MOTORS, validate
+from transport import get_producer, send
+LOG = logging.getLogger(__name__)
 
-# Konfiguracja Kafki
-KAFKA_BROKER = os.getenv('KAFKA_SERVER', 'kafka:9092')
-TOPIC = 'telemetry_topic'
-
-def get_producer():
-    while True:
-        try:
-            producer = KafkaProducer(
-                bootstrap_servers=[KAFKA_BROKER],
-                value_serializer=lambda v: json.dumps(v).encode('utf-8')
-            )
-            print("✅ Połączono z Kafką! Rozpoczynamy taniec AGV (Napęd Omniwheel)...")
-            return producer
-        except Exception as e:
-            print(f"⏳ Czekam na Kafkę... ({e})")
-            time.sleep(5)
+def make_payload(sequence, elapsed, rng, session_id, scenario="normal", timestamp=None):
+    patterns = ((100, 100, 100, 100), (100, -100, -100, 100),
+                (80, -80, 80, -80), (-100, 100, 100, -100))
+    rpms = patterns[int(elapsed // 10) % len(patterns)]
+    motors = {name: {"speed_rpm": round(rpm + rng.uniform(-2, 2), 1), "temp_C": 42.0}
+              for name, rpm in zip(MOTORS, rpms)}
+    # Synthetic scenarios verify the pipeline, not the physical diagnostic accuracy.
+    fault = scenario == "overheat" and elapsed >= 10
+    if fault:
+        motors["rear_right"]["temp_C"] = 65.0
+        motors["rear_right"]["speed_rpm"] *= 0.2
+    payload = {
+        "schema_version": 1, "timestamp": time.time() if timestamp is None else timestamp,
+        "agv_id": AGV_ID, "session_id": session_id, "sequence": sequence,
+        "source": "emulator", "scenario": scenario, "fault_active": fault,
+        "telemetry": {
+            "power_supply": {"bus_voltage_V": round(48 + rng.uniform(-0.2, 0.2), 2),
+                             "current_A": round((5.0 if fault else 2.5) + rng.uniform(-0.1, 0.5), 2)},
+            "motors": motors,
+            "imu": {"accel_g": {"x": 0.02, "y": -0.01, "z": 0.99},
+                    "gyro_dps": {"x": 0.0, "y": 0.0, "z": 0.0}},
+        },
+    }
+    validate(payload)
+    return payload
 
 def start_emulator():
+    hz = float(os.getenv("EMULATOR_HZ", "10"))
+    duration = float(os.getenv("EMULATOR_DURATION_S", "0"))
+    scenario = os.getenv("EMULATOR_SCENARIO", "normal")
+    if not math.isfinite(hz) or not 0 < hz <= 1000 or not math.isfinite(duration) or duration < 0:
+        raise ValueError("EMULATOR_HZ must be in (0, 1000], duration >= 0")
+    if scenario not in ("normal", "overheat"):
+        raise ValueError("EMULATOR_SCENARIO must be normal or overheat")
+    rng = random.Random(int(os.getenv("EMULATOR_SEED", "42")))
+    session_id = str(uuid.uuid4())
+    stop = threading.Event()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, lambda *_: stop.set())
     producer = get_producer()
-    
-    while True:
-        # ZEGAR FAZOWY
-        current_time_sec = time.time()
-        cycle_phase = (int(current_time_sec) // 10) % 4 
-        noise = random.uniform(-2.0, 2.0)
-        
-        # DEFINICJA TRYBÓW
-        if cycle_phase == 0:
-            mode = "JAZDA W PRZÓD"
-            fl_rpm, fr_rpm, rl_rpm, rr_rpm = 100.0, 100.0, 100.0, 100.0
-        elif cycle_phase == 1:
-            mode = "STRAFE W PRAWO"
-            fl_rpm, fr_rpm, rl_rpm, rr_rpm = 100.0, -100.0, -100.0, 100.0
-        elif cycle_phase == 2:
-            mode = "OBRÓT W MIEJSCU"
-            fl_rpm, fr_rpm, rl_rpm, rr_rpm = 80.0, -80.0, 80.0, -80.0
-        elif cycle_phase == 3:
-            mode = "STRAFE W LEWO"
-            fl_rpm, fr_rpm, rl_rpm, rr_rpm = -100.0, 100.0, 100.0, -100.0
-
-        current_fl = fl_rpm + noise
-        current_fr = fr_rpm + noise
-        current_rl = rl_rpm + noise
-        current_rr = rr_rpm + noise
-
-        # BUDOWANIE PACZKI DANYCH
-        payload = {
-            "timestamp": current_time_sec, # Zmiana z tekstu ISO na Unix Float! (Wymagane przez bazę)
-            "agv_id": "AGV-01",
-            "telemetry": {
-                "power_supply": {
-                    "bus_voltage_V": round(48.0 + random.uniform(-0.2, 0.2), 2),
-                    "current_A": round(2.5 + random.uniform(-0.1, 0.5), 2)
-                },
-                "motors": {
-                    "front_left": {"speed_rpm": round(current_fl, 1), "temp_C": 42.1},
-                    "front_right": {"speed_rpm": round(current_fr, 1), "temp_C": 41.8},
-                    "rear_left": {"speed_rpm": round(current_rl, 1), "temp_C": 43.0},
-                    "rear_right": {"speed_rpm": round(current_rr, 1), "temp_C": 40.5}
-                },
-                "imu": {
-                    "accel_g": {"x": 0.02, "y": -0.01, "z": 0.99},
-                    "gyro_dps": {"x": 0.1, "y": 0.0, "z": round(12.5 + noise, 1)}
-                },
-                "edge_diagnostics": {
-                    "cpu_temp_C": round(45.0 + random.uniform(-2.0, 2.0), 1)
-                }
-            }
-        }
-        
-        producer.send(TOPIC, payload)
-        
-        print(f"🔄 {mode:<16} | FL:{current_fl:>5.1f} FR:{current_fr:>6.1f} RL:{current_rl:>6.1f} RR:{current_rr:>6.1f}", end='\r', flush=True)
-        time.sleep(0.1)
+    started = deadline = time.monotonic()
+    sequence = 0
+    try:
+        while not stop.is_set():
+            elapsed = time.monotonic() - started
+            if duration and elapsed >= duration:
+                break
+            send(producer, TELEMETRY_TOPIC, make_payload(sequence, elapsed, rng, session_id, scenario))
+            sequence += 1
+            if sequence % max(1, int(hz)) == 0:
+                LOG.info("Acknowledged=%s session=%s", sequence, session_id)
+            deadline += 1 / hz
+            deadline = max(deadline, time.monotonic())
+            stop.wait(max(0, deadline - time.monotonic()))
+    finally:
+        producer.close(timeout=10)
 
 if __name__ == "__main__":
-    start_emulator() # <-- BŁĄD BYŁ TUTAJ (Brakowało nawiasów)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    start_emulator()

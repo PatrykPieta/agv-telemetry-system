@@ -105,9 +105,13 @@ iframe {
 
 /* Twardy reset dla panelu deweloperskiego */
 .lil-gui.root {
-    bottom: auto !important;
+    top: auto !important;
+    bottom: 16px !important;
+    left: 16px !important;
+    right: auto !important;
     height: max-content !important;
-    max-height: 100vh !important;
+    max-height: 50vh !important;
+    overflow-y: auto;
     background-color: transparent !important;
     box-shadow: none !important;
 }

@@ -1,0 +1,100 @@
+{
+  "uid": "agv-system",
+  "title": "AGV — telemetria",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": {
+    "from": "now-5m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 8,
+      "title": "Prędkości kół [RPM]",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "agv-timescale"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT time, fl_rpm, fr_rpm, rl_rpm, rr_rpm FROM telemetry WHERE $__timeFilter(time) AND agv_id = ${agv:sqlstring} ORDER BY time"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Temperatury silników [°C]",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "agv-timescale"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT time, fl_temp_c, fr_temp_c, rl_temp_c, rr_temp_c FROM telemetry WHERE $__timeFilter(time) AND agv_id = ${agv:sqlstring} ORDER BY time"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Napięcie i prąd",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "agv-timescale"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT time, bus_voltage_v, current_a FROM telemetry WHERE $__timeFilter(time) AND agv_id = ${agv:sqlstring} ORDER BY time"
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "agv",
+        "label": "AGV",
+        "type": "query",
+        "datasource": {
+          "type": "postgres",
+          "uid": "agv-timescale"
+        },
+        "query": "SELECT DISTINCT agv_id FROM telemetry ORDER BY agv_id",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "current": {
+          "text": "AGV-01",
+          "value": "AGV-01"
+        }
+      }
+    ]
+  }
+}

@@ -1,50 +1,28 @@
-const AGV_GEOMETRY = {
-    wheelRadius: 0.1,  
-    lx: 0.4,           
-    ly: 0.3            
-};
+export const AGV_GEOMETRY = { wheelRadius: 0.1, lx: 0.4, ly: 0.3 };
 
-export function updatePhysics(agvModel, wheelMeshes, rpmsState) {
-    if (!agvModel) return;
+export function velocities(rpms) {
+    const toMps = rpm => rpm * Math.PI * AGV_GEOMETRY.wheelRadius / 30;
+    const [fl, fr, rl, rr] = ['FL', 'FR', 'RL', 'RR'].map(key => toMps(rpms[key]));
+    return {
+        forward: (fl + fr + rl + rr) / 4,
+        strafe: (-fl + fr + rl - rr) / 4,
+        turn: (-fl + fr - rl + rr) / (4 * (AGV_GEOMETRY.lx + AGV_GEOMETRY.ly)),
+    };
+}
 
-    // Przeliczanie RPM na prędkość liniową (m/s)
-    const toMps = (rpm) => (rpm / 60) * 2 * Math.PI * AGV_GEOMETRY.wheelRadius;
-    const vFL = toMps(rpmsState.FL);
-    const vFR = toMps(rpmsState.FR);
-    const vRL = toMps(rpmsState.RL);
-    const vRR = toMps(rpmsState.RR);
-
-    // Kinematyka Mecanum
-    let forwardSpeed = (vFL + vFR + vRL + vRR) / 4;
-    let strafeSpeed  = (-vFL + vFR + vRL - vRR) / 4;
-    let turnSpeed    = (-vFL + vFR - vRL + vRR) / (4 * (AGV_GEOMETRY.lx + AGV_GEOMETRY.ly));
-
-    // Translacja ramy
-    agvModel.translateX(forwardSpeed * 0.1); 
-    agvModel.translateZ(strafeSpeed * 0.1);  
-    agvModel.rotateY(turnSpeed * 0.05);    
-    
-    // --- DODAJ TEN FRAGMENT POD RUCHEM ---
-    const LIMIT = 45; // Hala ma 100x100, więc 45 to bezpieczna granica przed krawędzią
-    
-    if (Math.abs(agvModel.position.x) > LIMIT) {
-        agvModel.position.x = LIMIT * Math.sign(agvModel.position.x);
-    }
-    if (Math.abs(agvModel.position.z) > LIMIT) {
-        agvModel.position.z = LIMIT * Math.sign(agvModel.position.z);
-    }
-    // -------------------------------------
-
-    // Obrót wizualny samych kół
-    wheelMeshes.forEach(wheel => {
+export function updatePhysics(agvModel, wheelMeshes, state, deltaSeconds) {
+    if (!agvModel || !Number.isFinite(deltaSeconds) || deltaSeconds <= 0) return;
+    if (!['FL', 'FR', 'RL', 'RR'].every(key => Number.isFinite(state[key]))) return;
+    // Pause on stale telemetry or after a suspended browser tab; no catch-up jump.
+    if (!state.lastReceived || performance.now() - state.lastReceived > 2000 || deltaSeconds > 0.25) return;
+    const speed = velocities(state);
+    agvModel.translateX(speed.forward * deltaSeconds);
+    agvModel.translateZ(speed.strafe * deltaSeconds);
+    agvModel.rotateY(speed.turn * deltaSeconds);
+    for (const wheel of wheelMeshes) {
         const name = wheel.name.toLowerCase();
-        let rotationVelocity = forwardSpeed * 0.05; 
-        
-        if (name.includes('fl') || name.includes('front_left')) rotationVelocity = vFL;
-        if (name.includes('fr') || name.includes('front_right')) rotationVelocity = vFR;
-        if (name.includes('rl') || name.includes('rear_left')) rotationVelocity = vRL;
-        if (name.includes('rr') || name.includes('rear_right')) rotationVelocity = vRR;
-        
-        wheel.rotateY(rotationVelocity * 0.5); 
-    });
+        const key = [['FL', 'front_left'], ['FR', 'front_right'], ['RL', 'rear_left'], ['RR', 'rear_right']]
+            .find(([short, full]) => name.includes(short.toLowerCase()) || name.includes(full))?.[0];
+        if (key) wheel.rotateY(state[key] * Math.PI / 30 * deltaSeconds);
+    }
 }

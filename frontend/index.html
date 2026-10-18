@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Digital Twin AGV - Three.js</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2">
    <script type="importmap">
         {
           "imports": {
@@ -28,12 +28,14 @@
                 
                 <p>Zegar: <span id="ui-clock" style="font-family: monospace; color: #00ff00;">--:--:--</span></p>
                 
-                <p>Prędkość: <span id="ui-rpm">0</span> RPM</p>
-                <p>Bateria: <span id="ui-volt">0</span> V</p>
+                <p>Przednie lewe koło: <span id="ui-rpm">—</span> RPM</p>
+                <p>Bateria: <span id="ui-volt">—</span> V</p>
+                <p id="ui-alert" role="status">Brak bieżących ostrzeżeń</p>
 
                 <button id="camera-toggle" style="margin-top: 10px; width: 100%; padding: 8px 10px; cursor: pointer; background-color: #333; color: #00ff00; border: 1px solid #555; border-radius: 4px; font-weight: bold;">
-                    🔒 Podążaj za wózkiem
+                    🔓 Odłącz kamerę
                 </button>
+                <button id="scene-options" aria-expanded="false" style="margin-top: 8px; width: 100%; padding: 6px;">Ustawienia sceny</button>
             </div>
 
             <div id="performance-monitor" style="position: absolute; top: 20px; right: 20px; color: #00ff00; background: rgba(0,0,0,0.8); padding: 10px; font-family: monospace; z-index: 100; pointer-events: none; border-radius: 5px; border: 1px solid #00ff00; font-size: 14px;">
@@ -47,17 +49,27 @@
             
             <div class="grafana-card">
                 <h4>Prędkość Obrotowa Kół (RPM)</h4>
-                <iframe src="http://localhost:3000/d-solo/advbjcq/agv?orgId=1&from=now-5m&to=now&timezone=browser&panelId=panel-8&refresh=1s" width="100%" height="220" frameborder="0"></iframe>
+                <iframe data-panel="8" title="Prędkości kół" width="100%" height="220" frameborder="0"></iframe>
             </div>
 
             <div class="grafana-card">
-                <h4>Temperatura Łożysk Silników (°C)</h4>
-                <iframe src="http://localhost:3000/d-solo/advbjcq/agv?orgId=1&from=now-5m&to=now&timezone=browser&panelId=panel-9&refresh=1s" width="100%" height="220" frameborder="0"></iframe>
+                <h4>Temperatura silników (°C)</h4>
+                <iframe data-panel="9" title="Temperatury silników" width="100%" height="220" frameborder="0"></iframe>
             </div>
         </div>
 
     </div>
 
-    <script type="module" src="js/main.js"></script>
+    <script type="module" src="js/main.js?v=2"></script>
+    <script type="module">
+        const config = await fetch('/api/config').then(response => response.json());
+        document.querySelectorAll('iframe[data-panel]').forEach(frame => {
+            const url = new URL('/d-solo/agv-system/agv', location.href);
+            url.port = '3000';
+            url.search = new URLSearchParams({ orgId: '1', from: 'now-5m', to: 'now',
+                panelId: frame.dataset.panel, refresh: '5s', 'var-agv': config.agv_id });
+            frame.src = url.href;
+        });
+    </script>
 </body>
 </html>

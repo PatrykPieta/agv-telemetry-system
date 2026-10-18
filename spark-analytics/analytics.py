@@ -1,67 +1,43 @@
+"""Baseline drive diagnostics: overheating warnings, not a seizure classifier."""
 import os
-import sys
-import time
-
-print("--- URUCHAMIANIE MODUŁU SPARK ---", flush=True)
-print("Pobieranie sterowników Kafka z sieci... (To może potrwać od 2 do 5 minut, cierpliwości!)", flush=True)
-
-# Magiczna linijka pobierająca sterowniki
-os.environ['PYSPARK_SUBMIT_ARGS'] = '--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.4.1 pyspark-shell'
-
+os.environ.setdefault("PYSPARK_SUBMIT_ARGS",
+    "--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.4.1 pyspark-shell")
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, lit
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType
+from pyspark.sql.functions import col, from_json, lit, array, struct, explode, to_json
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType, LongType
 
-# Tworzenie sesji (tutaj następuje to długie pobieranie)
-spark = SparkSession.builder \
-    .appName("AGV_Predictive_Maintenance") \
-    .config("spark.sql.shuffle.partitions", "4") \
-    .getOrCreate()
-
-spark.sparkContext.setLogLevel("WARN")
-print("✅ Gotowe! Silnik Spark uruchomiony.", flush=True)
-print("🔗 Łączenie z Kafką...", flush=True)
-
+MOTORS = ("front_left", "front_right", "rear_left", "rear_right")
+motor_schema = StructType([StructField("speed_rpm", DoubleType()), StructField("temp_C", DoubleType())])
 schema = StructType([
-    StructField("timestamp", StringType()),
-    StructField("agv_id", StringType()),
-    StructField("telemetry", StructType([
-        StructField("motors", StructType([
-            StructField("rear_right", StructType([
-                StructField("speed_rpm", DoubleType()),
-                StructField("temp_C", DoubleType())
-            ]))
-        ]))
-    ]))
+    StructField("timestamp", DoubleType()), StructField("agv_id", StringType()),
+    StructField("session_id", StringType()), StructField("sequence", LongType()),
+    StructField("telemetry", StructType([StructField("motors", StructType([
+        StructField(name, motor_schema) for name in MOTORS]))]))
 ])
 
-df = spark \
-    .readStream \
-    .format("kafka") \
-    .option("kafka.bootstrap.servers", "kafka:9092") \
-    .option("subscribe", "telemetry_topic") \
-    .option("startingOffsets", "latest") \
-    .load()
+def main():
+    broker = os.getenv("KAFKA_SERVER", "kafka:9092")
+    spark = (SparkSession.builder.master(os.getenv("SPARK_MASTER", "local[2]"))
+             .appName("AGV_Drive_Diagnostics").config("spark.sql.shuffle.partitions", "2").getOrCreate())
+    spark.sparkContext.setLogLevel("WARN")
+    try:
+        raw = (spark.readStream.format("kafka").option("kafka.bootstrap.servers", broker)
+               .option("subscribe", "telemetry_topic").option("startingOffsets", "earliest").load())
+        data = raw.select(from_json(col("value").cast("string"), schema).alias("data")).select("data.*")
+        motors = data.select("timestamp", "agv_id", "session_id", "sequence", explode(array(*[
+            struct(lit(name).alias("name"), col(f"telemetry.motors.{name}.temp_C").alias("temperature"))
+            for name in MOTORS])).alias("motor"))
+        alerts = (motors.filter(col("motor.temperature") > float(os.getenv("ALERT_TEMP_C", "50")))
+                  .withColumn("ALERT_MSG", lit("Podwyższona temperatura silnika — sprawdź napęd"))
+                  .withColumn("schema_version", lit(1)))
+        query = (alerts.select(col("agv_id").alias("key"), to_json(struct("*")).alias("value"))
+                 .writeStream.format("kafka").option("kafka.bootstrap.servers", broker)
+                 .option("topic", "alerts_topic")
+                 .option("checkpointLocation", os.getenv("SPARK_CHECKPOINT", "/checkpoints/drive-temperature-v1"))
+                 .trigger(processingTime="1 second").start())
+        query.awaitTermination()
+    finally:
+        spark.stop()
 
-parsed_df = df.select(from_json(col("value").cast("string"), schema).alias("data")).select("data.*")
-
-alerts = parsed_df.filter(
-    (col("telemetry.motors.rear_right.temp_C") > 50.0) & 
-    (col("telemetry.motors.rear_right.speed_rpm") < 118.0)
-)
-
-final_alerts = alerts.withColumn("ALERT_MSG", lit("🚨 KRYTYCZNE ZATARCIE: Prawy tył przegrzany! 🚨"))
-
-print("📡 Nasłuchiwanie strumienia rozpoczęte! Szukam anomalii...", flush=True)
-
-query = final_alerts \
-    .selectExpr("CAST(agv_id AS STRING) AS key", "to_json(struct(*)) AS value") \
-    .writeStream \
-    .format("kafka") \
-    .option("kafka.bootstrap.servers", "kafka:9092") \
-    .option("topic", "alerts_topic") \
-    .option("checkpointLocation", "/tmp/spark_checkpoint") \
-    .trigger(processingTime='1 second') \
-    .start()
-
-query.awaitTermination()
+if __name__ == "__main__":
+    main()
